@@ -1,0 +1,68 @@
+---
+import { commandDefs as commands, tree } from '../lib/content';
+
+// Link registry for the `open` command (networks, projects, and short aliases).
+const links: Record<string, string> = {
+  'blog-geeek-org': 'https://www.geeek.org',
+  github: 'https://github.com/ltoinel',
+  linkedin: 'https://www.linkedin.com/in/ltoinel',
+  x: 'https://twitter.com/ltoinel',
+  facebook: 'https://www.facebook.com/ltoinel',
+  soundcloud: 'https://soundcloud.com/ludovic-toinel',
+  'hack-the-box': 'https://app.hackthebox.com/profile/290482',
+  'geeek-org': 'https://www.geeek.org',
+  apollovan: 'https://apollovan.fr',
+  'open-source': 'https://github.com/ltoinel',
+  photographie: 'https://unsplash.com/fr/@ltoinel',
+  'drones-fpv': 'https://www.geeek.org/fermeture-du-site-wiki-fpv/',
+  htb: 'https://app.hackthebox.com/profile/290482',
+  blog: 'https://www.geeek.org',
+};
+
+const cfg = { host: 'ludovic.toinel.com', user: 'ludovic@toinel.com', links };
+const safe = (o: unknown) => JSON.stringify(o).replace(/</g, '\\u003c');
+---
+
+<section class="ssh-win needs-js" id="ssh" aria-label="Terminal interactif — ludovic.toinel.com">
+  <header class="ssh-bar" id="ssh-bar">
+    <span class="ssh-dots">
+      <button type="button" class="ssh-ctl" data-act="close" style="background:#ff5f56" aria-label="Fermer la session"></button>
+      <button type="button" class="ssh-ctl" data-act="min" style="background:var(--amber)" aria-label="Réduire"></button>
+      <button type="button" class="ssh-ctl" data-act="max" style="background:var(--green)" aria-label="Agrandir / restaurer"></button>
+    </span>
+    <span class="ssh-title">ssh — ludovic@toinel.com: ~</span>
+    <span class="ssh-status"><span class="ssh-led"></span> connected</span>
+  </header>
+
+  <div class="ssh-body" id="ssh-body" role="log" aria-live="polite">
+    <div id="ssh-output"></div>
+    <div class="ssh-inputline" id="ssh-inputline" hidden>
+      <span class="ssh-prompt" id="ssh-prompt"></span
+      ><span class="ssh-typed" id="ssh-typed" aria-hidden="true"></span>
+      <input
+        id="ssh-input"
+        type="text"
+        autocomplete="off"
+        autocapitalize="off"
+        autocorrect="off"
+        spellcheck="false"
+        aria-label="Saisir une commande"
+      />
+    </div>
+  </div>
+
+  <span class="ssh-grip" aria-hidden="true"></span>
+</section>
+
+<button type="button" class="ssh-reconnect needs-js" id="ssh-reconnect" hidden>
+  ⏻ reconnect — ssh ludovic.toinel.com
+</button>
+
+<script type="application/json" id="shell-fs" is:inline set:html={safe(tree)}></script>
+<script type="application/json" id="shell-commands" is:inline set:html={safe(commands)}></script>
+<script type="application/json" id="shell-cfg" is:inline set:html={safe(cfg)}></script>
+
+<script>
+  import { initTerminal } from '../lib/terminal';
+  initTerminal();
+</script>

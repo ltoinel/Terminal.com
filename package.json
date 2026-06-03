@@ -1,0 +1,34 @@
+{
+  "name": "ludovic-toinel-com",
+  "version": "3.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Portail personnel ludovic.toinel.com — Astro + Tailwind CSS.",
+  "author": "Ludovic Toinel",
+  "license": "MIT",
+  "homepage": "https://ludovic.toinel.com",
+  "scripts": {
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check": "astro check",
+    "check:commands": "node scripts/check-commands.ts",
+    "astro": "astro",
+    "upgrade": "ncu",
+    "upgrade:apply": "ncu -u && npm install && npm run build"
+  },
+  "dependencies": {
+    "@astrojs/sitemap": "^3.4.0",
+    "@iconify-json/lucide": "^1.2.0",
+    "@tailwindcss/vite": "^4.1.0",
+    "astro": "^5.8.0",
+    "astro-icon": "^1.1.5",
+    "tailwindcss": "^4.1.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.4",
+    "npm-check-updates": "^17.1.0",
+    "typescript": "^5.7.0"
+  }
+}

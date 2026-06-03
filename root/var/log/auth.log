@@ -1,0 +1,3 @@
+sshd[4242]: Accepted publickey for visitor from 127.0.0.1 port 22 ssh2
+sshd[4242]: pam_unix(sshd:session): session opened for user visitor
+sudo: visitor : command not allowed ; PWD=/home/ludovic ; USER=root ; COMMAND=/bin/cat /etc/shadow

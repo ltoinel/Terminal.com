@@ -1,0 +1,365 @@
+@import "tailwindcss";
+
+/* ============================================================================
+   TERMINAL / PHOSPHOR THEME — ludovic.toinel.com
+   CRT font (VT323) for display, IBM Plex Mono for body text.
+   Default theme = green phosphor on black. `.amber` = amber monochrome CRT.
+   ========================================================================== */
+
+@theme {
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-crt: "VT323", "IBM Plex Mono", monospace;
+}
+
+:root {
+  /* --- Dark phosphor (default) --- */
+  --bg: #080b09;
+  --bg-elev: #0c100e;
+  --bg-bar: #111814;
+  --fg: #b6e3c4;
+  --fg-bright: #e9fff0;
+  --green: #41f08a;
+  --green-dim: #379e63;
+  --amber: #f6b53e;
+  --cyan: #56d6e0;
+  --dim: #587a64;
+  --border: #1c3527;
+  --border-bright: #2f5d42;
+  --sel-bg: #41f08a;
+  --sel-fg: #06120b;
+  --glow: 0 0 6px rgba(65, 240, 138, 0.45);
+  --glow-strong: 0 0 14px rgba(65, 240, 138, 0.55);
+  --scan: 0.04;
+  --grain: 0.05;
+}
+
+html.amber {
+  /* --- Amber monochrome (CRT) --- single phosphor colour, brightness levels --- */
+  --bg: #0a0700;
+  --bg-elev: #120c01;
+  --bg-bar: #1b1203;
+  --fg: #e8a51a;
+  --fg-bright: #fff0c0;
+  --green: #ffb000; /* primary phosphor (here: amber) */
+  --green-dim: #b87600;
+  --amber: #ffd27f;
+  --cyan: #c8860a;
+  --dim: #8a5e10;
+  --border: #3a2600;
+  --border-bright: #5e3f00;
+  --sel-bg: #ffb000;
+  --sel-fg: #0a0700;
+  --glow: 0 0 6px rgba(255, 176, 0, 0.45);
+  --glow-strong: 0 0 14px rgba(255, 176, 0, 0.6);
+  --scan: 0.04;
+  --grain: 0.05;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+    background: var(--bg);
+  }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-mono);
+    font-size: 15px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  ::selection {
+    background: var(--sel-bg);
+    color: var(--sel-fg);
+    text-shadow: none;
+  }
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+  :focus-visible {
+    outline: 2px solid var(--green);
+    outline-offset: 3px;
+  }
+  /* Subtle terminal-style scrollbar */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--bg);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-bright);
+    border: 2px solid var(--bg);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--green-dim);
+  }
+}
+
+@layer components {
+  /* ---------- Full-screen overlays (CRT + grain) ---------- */
+  .fx-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    pointer-events: none;
+  }
+  .fx-scanlines {
+    background: repeating-linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, calc(var(--scan) * 3)) 0px,
+      rgba(0, 0, 0, calc(var(--scan) * 3)) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    mix-blend-mode: multiply;
+  }
+  .fx-vignette {
+    background: radial-gradient(
+      ellipse at center,
+      transparent 55%,
+      rgba(0, 0, 0, 0.35) 100%
+    );
+  }
+  .fx-grain {
+    opacity: var(--grain);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    animation: grain-shift 0.6s steps(2) infinite;
+  }
+  .fx-flicker {
+    background: var(--green);
+    opacity: 0;
+    mix-blend-mode: overlay;
+    animation: flicker 7s infinite;
+  }
+
+  /* ---------- Terminal lexicon ---------- */
+  .prompt {
+    color: var(--green);
+    text-shadow: var(--glow);
+  }
+  .prompt-user {
+    color: var(--amber);
+    text-shadow: none;
+  }
+  .prompt-path {
+    color: var(--cyan);
+  }
+  .cmd {
+    color: var(--fg-bright);
+  }
+  .comment {
+    color: var(--dim);
+  }
+  .out {
+    color: var(--fg);
+  }
+  .accent {
+    color: var(--green);
+    text-shadow: var(--glow);
+  }
+
+  /* Terminal link: dotted underline + "selection" highlight on hover */
+  .tlink {
+    color: var(--green);
+    border-bottom: 1px dotted var(--green-dim);
+    transition:
+      background 0.12s,
+      color 0.12s;
+  }
+  .tlink:hover {
+    background: var(--green);
+    color: var(--sel-fg);
+    border-color: transparent;
+    text-shadow: none;
+  }
+
+  /* Chip / bracketed tag */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.2rem 0.6rem;
+    border: 1px solid var(--border-bright);
+    color: var(--fg);
+    background: var(--bg);
+    transition:
+      border-color 0.15s,
+      color 0.15s,
+      box-shadow 0.15s;
+  }
+  .chip:hover {
+    border-color: var(--green);
+    color: var(--green);
+    box-shadow: var(--glow);
+  }
+
+}
+
+@layer utilities {
+  .text-glow {
+    text-shadow: var(--glow);
+  }
+}
+
+/* ---------- Keyframes ---------- */
+@keyframes blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  50.01%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes grain-shift {
+  0% { transform: translate(0, 0); }
+  100% { transform: translate(-4%, 3%); }
+}
+@keyframes flicker {
+  0%, 97%, 100% { opacity: 0; }
+  98% { opacity: 0.025; }
+  99% { opacity: 0.01; }
+}
+/* ---------- Accessibility: reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .fx-grain,
+  .fx-flicker { animation: none; }
+}
+
+/* ============================================================================
+   INTERACTIVE SHELL — draggable / resizable SSH window
+   ========================================================================== */
+
+/* The terminal needs JS: hidden by default, revealed once the `js` flag is set. */
+.needs-js { display: none; }
+.js .ssh-win { display: flex; }
+.js .ssh-reconnect:not([hidden]) { display: inline-flex; }
+
+.ssh-win {
+  position: fixed;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  flex-direction: column;
+  width: min(880px, 94vw);
+  height: min(70vh, 640px);
+  min-width: 300px; min-height: 220px;
+  max-width: 100vw; max-height: 92vh;
+  background: var(--bg-elev);
+  border: 1px solid var(--border-bright);
+  border-radius: 9px;
+  box-shadow: 0 0 0 1px var(--bg), 0 40px 90px -30px rgba(0, 0, 0, 0.85);
+  overflow: hidden;
+  resize: both;
+  z-index: 40;
+}
+.ssh-win.maximized { inset: 12px; width: auto; height: auto; transform: none; resize: none; }
+.ssh-win.minimized { height: auto !important; resize: none; }
+.ssh-win.minimized .ssh-body, .ssh-win.minimized .ssh-grip { display: none; }
+.ssh-win.closed {
+  opacity: 0; pointer-events: none;
+  transform: translate(-50%, -50%) scale(0.96);
+  transition: opacity 0.25s, transform 0.25s;
+}
+
+.ssh-bar {
+  display: flex; align-items: center; gap: 0.7rem;
+  flex: none;
+  padding: 0.55rem 0.85rem;
+  background: var(--bg-bar);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.8rem; color: var(--dim);
+  cursor: grab; user-select: none; touch-action: none;
+}
+.ssh-bar.grabbing { cursor: grabbing; }
+.ssh-dots { display: flex; gap: 0.5rem; }
+.ssh-ctl {
+  width: 12px; height: 12px; padding: 0;
+  border-radius: 50%; border: 1px solid rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+.ssh-ctl:hover { filter: brightness(1.25); }
+.ssh-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ssh-status { margin-left: auto; display: inline-flex; align-items: center; gap: 0.4rem; white-space: nowrap; }
+.ssh-led { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: var(--glow); }
+
+.ssh-body {
+  flex: 1; min-height: 0; overflow-y: auto;
+  padding: clamp(1rem, 3vw, 1.6rem);
+  font-size: 14px; line-height: 1.6; cursor: text;
+}
+.ssh-body .ln { white-space: pre-wrap; word-break: break-word; }
+.ssh-out { margin: 0.15rem 0 0.6rem; }
+.reveal-line { opacity: 0; transform: translateY(4px); transition: opacity 0.25s, transform 0.25s; }
+.reveal-line.is-in { opacity: 1; transform: none; }
+
+.ssh-inputline { position: relative; display: flex; align-items: baseline; flex-wrap: wrap; }
+.ssh-typed { white-space: pre-wrap; word-break: break-word; }
+.ssh-caret {
+  display: inline-block; width: 0.55em; height: 1.05em;
+  transform: translateY(0.16em);
+  background: var(--green); box-shadow: var(--glow);
+  animation: blink 1.05s steps(1) infinite;
+}
+#ssh-input {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  background: transparent; border: 0; outline: none;
+  color: transparent; caret-color: transparent; font: inherit;
+}
+
+.ssh-grip {
+  position: absolute; right: 2px; bottom: 2px;
+  width: 14px; height: 14px; pointer-events: none; opacity: 0.8;
+  background: linear-gradient(135deg,
+    transparent 55%, var(--border-bright) 55%, var(--border-bright) 64%,
+    transparent 64%, transparent 73%, var(--border-bright) 73%,
+    var(--border-bright) 82%, transparent 82%);
+}
+::-webkit-resizer { background: transparent; }
+
+.ssh-reconnect {
+  position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  z-index: 41; align-items: center; gap: 0.5rem;
+  padding: 0.8rem 1.4rem;
+  font-family: var(--font-mono); font-size: 0.95rem;
+  color: var(--green); background: var(--bg-elev);
+  border: 1px solid var(--green); border-radius: 8px;
+  box-shadow: var(--glow); cursor: pointer;
+}
+.ssh-reconnect:hover { background: var(--green); color: var(--sel-fg); box-shadow: var(--glow-strong); }
+
+@media (max-width: 640px) {
+  .ssh-win {
+    top: 0; left: 0; transform: none;
+    width: 100vw; height: 100svh; max-height: 100svh;
+    border-radius: 0; resize: none;
+  }
+  .ssh-grip { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal-line { opacity: 1; transform: none; transition: none; }
+  .ssh-win.closed { transition: none; }
+}
+
+/* Matrix digital-rain background (green theme only). */
+.fx-matrix {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.4;
+}
+html.amber .fx-matrix { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .fx-matrix { display: none; }
+}

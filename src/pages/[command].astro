@@ -1,0 +1,31 @@
+---
+import Layout from '../layouts/Layout.astro';
+import ThemeToggle from '../components/ThemeToggle.astro';
+import Terminal from '../components/Terminal.astro';
+import { routes } from '../lib/content';
+
+// One static page per deep-linkable command / document. Opening the URL boots
+// the terminal, which then runs the command named in the path (see terminal.ts).
+export function getStaticPaths() {
+  return routes.map((r) => ({
+    params: { command: r.slug },
+    props: { slug: r.slug, desc: r.desc },
+  }));
+}
+
+interface Props {
+  slug: string;
+  desc: string;
+}
+const { slug, desc } = Astro.props;
+const title = `${slug} — Ludovic Toinel`;
+const description = `${desc} · terminal interactif de ludovic.toinel.com`;
+---
+
+<Layout title={title} description={description}>
+  <div class="fixed right-3 top-3 z-50 sm:right-5 sm:top-5">
+    <ThemeToggle />
+  </div>
+
+  <Terminal />
+</Layout>

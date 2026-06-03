@@ -1,0 +1,73 @@
+---
+/**
+ * schema.org `Person` structured data, emitted as a
+ * `<script type="application/ld+json">` block in the document <head>.
+ *
+ * Kept independent of `Layout.astro` so the structured-data concern lives on its
+ * own. Identity values come from the caller (single source of truth); the
+ * structured-data-only fields (description, knowsAbout, sameAs, …) live here.
+ */
+interface SiteInfo {
+  name: string;
+  firstName: string;
+  lastName: string;
+  role: string;
+  company: string;
+  companyUrl: string;
+  url: string;
+  birthPlace: string;
+}
+
+interface Props {
+  /** Site identity (shared with the page meta tags). */
+  site: SiteInfo;
+  /** Absolute URL of the portrait, reused for `image`. */
+  image: string;
+}
+
+const { site, image } = Astro.props;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Person',
+  '@id': `${site.url}/#person`,
+  name: site.name,
+  givenName: site.firstName,
+  familyName: site.lastName,
+  gender: 'Male',
+  url: `${site.url}/`,
+  image,
+  jobTitle: site.role,
+  description:
+    "Passionné de technologie depuis toujours, je conçois et fais évoluer des plateformes fullstack et explore l'innovation au quotidien en tant qu'architecte chez Capgemini. En dehors du travail, je partage mes découvertes sur mon blog Geeek.org, je bricole et code des projets open source, je pratique le hacking éthique, la photographie et le pilotage de drones FPV. J'aime aussi prendre la route : Apollovan raconte mes voyages en van aménagé. Et quand je débranche, je fais de la musique.",
+  knowsAbout: [
+    'Architecture logicielle',
+    'Développement Fullstack',
+    'Innovation',
+    'Cybersécurité',
+    'Nouvelles technologies',
+    'Photographie',
+    'Drones FPV',
+  ],
+  nationality: { '@type': 'Country', name: 'France' },
+  birthPlace: { '@type': 'Place', name: site.birthPlace },
+  worksFor: { '@type': 'Organization', name: site.company, url: site.companyUrl },
+  // Profiles & external references used for entity disambiguation.
+  sameAs: [
+    'https://www.wikidata.org/wiki/Q140004299',
+    'https://www.geeek.org',
+    'https://github.com/ltoinel',
+    'https://www.linkedin.com/in/ltoinel',
+    'https://twitter.com/ltoinel',
+    'https://www.facebook.com/ltoinel',
+    'https://soundcloud.com/ludovic-toinel',
+    'https://app.hackthebox.com/profile/290482',
+    'https://x.com/ltoinel',
+    'https://unsplash.com/fr/@ltoinel',
+    'https://apollovan.fr',
+    'https://tekkit.io/actu/portraits/ludovic7777',
+  ],
+};
+---
+
+<script type="application/ld+json" is:inline set:html={JSON.stringify(jsonLd)} />

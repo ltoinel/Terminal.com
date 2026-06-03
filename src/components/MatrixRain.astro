@@ -1,0 +1,52 @@
+---
+// Decorative "Matrix" digital-rain background for the green/CRT theme.
+// Sits behind the terminal window; hidden in light/ASCII mode and under
+// prefers-reduced-motion (handled in global.css).
+---
+
+<canvas class="fx-matrix" aria-hidden="true"></canvas>
+
+<script>
+  const canvas = document.querySelector<HTMLCanvasElement>('.fx-matrix');
+  const ctx = canvas?.getContext('2d');
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  if (canvas && ctx && !reduce) {
+    const FONT = 14;
+    const GLYPHS = 'アイウエオカキクケコサシスセソタチツテトナニヌネノﾊﾋﾌﾍﾎ0123456789:.=*+-<>¦|';
+    let cols = 0;
+    let drops: number[] = [];
+
+    const resize = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      cols = Math.ceil(canvas.width / FONT);
+      drops = Array.from({ length: cols }, () => Math.random() * -50);
+    };
+    resize();
+    window.addEventListener('resize', resize);
+
+    let last = 0;
+    const tick = (now: number) => {
+      requestAnimationFrame(tick);
+      if (now - last < 55) return; // ~18 fps — gentle
+      last = now;
+
+      // Trail fade using the page background colour.
+      ctx.fillStyle = 'rgba(8, 11, 9, 0.10)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.font = `${FONT}px "IBM Plex Mono", monospace`;
+
+      for (let i = 0; i < drops.length; i++) {
+        const g = GLYPHS[(Math.random() * GLYPHS.length) | 0];
+        const y = drops[i] * FONT;
+        // Bright leading glyph, dimmer trail.
+        ctx.fillStyle = Math.random() > 0.97 ? '#c8ffd8' : '#2bbf6a';
+        ctx.fillText(g, i * FONT, y);
+        if (y > canvas.height && Math.random() > 0.975) drops[i] = 0;
+        drops[i]++;
+      }
+    };
+    requestAnimationFrame(tick);
+  }
+</script>

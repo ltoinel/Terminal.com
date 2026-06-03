@@ -1,0 +1,22 @@
+---
+import { Icon } from 'astro-icon/components';
+---
+
+<button
+  id="theme-toggle"
+  type="button"
+  aria-label="Basculer le thème (vert CRT / ambre)"
+  class="chip font-mono text-sm"
+>
+  <Icon name="lucide:square-terminal" class="h-4 w-4" />
+  <span class="[html.amber_&]:hidden">crt</span>
+  <span class="hidden [html.amber_&]:inline">amber</span>
+</button>
+
+<script>
+  const btn = document.getElementById('theme-toggle');
+  btn?.addEventListener('click', () => {
+    const isAmber = document.documentElement.classList.toggle('amber');
+    localStorage.setItem('theme', isAmber ? 'amber' : 'green');
+  });
+</script>
