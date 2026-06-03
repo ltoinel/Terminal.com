@@ -11,3 +11,7 @@ npm-debug.log*
 .env.production
 # macOS
 .DS_Store
+# local editor / Claude settings
+.claude/settings.local.json
+# test coverage
+coverage/

@@ -3,6 +3,7 @@ import Layout from '../layouts/Layout.astro';
 import ThemeToggle from '../components/ThemeToggle.astro';
 import Terminal from '../components/Terminal.astro';
 import { routes } from '../lib/content';
+import { site } from '../site.config.ts';
 
 // One static page per deep-linkable command / document. Opening the URL boots
 // the terminal, which then runs the command named in the path (see terminal.ts).
@@ -18,8 +19,8 @@ interface Props {
   desc: string;
 }
 const { slug, desc } = Astro.props;
-const title = `${slug} — Ludovic Toinel`;
-const description = `${desc} · terminal interactif de ludovic.toinel.com`;
+const title = `${slug} — ${site.name}`;
+const description = `${desc} · terminal interactif de ${site.shell.host}`;
 ---
 
 <Layout title={title} description={description}>

@@ -21,6 +21,8 @@ interface Cfg {
   host: string;
   /** User shown in the prompt (e.g. `ludovic@toinel.com`). */
   user: string;
+  /** Absolute home directory (shown as `~`); the shell starts here. */
+  home: string;
   /** `key -> URL` registry used by the `open` command. */
   links: Record<string, string>;
 }
@@ -82,8 +84,7 @@ export function format(text: string): string {
         return `<div class="ln"><span class="prompt-path">${inline(line.slice(3))}</span></div>`;
       if (line.startsWith('# '))
         return `<div class="ln"><span class="accent text-glow">${inline(line.slice(2))}</span></div>`;
-      if (line.startsWith('> '))
-        return `<div class="ln comment">${inline(line.slice(2))}</div>`;
+      if (line.startsWith('> ')) return `<div class="ln comment">${inline(line.slice(2))}</div>`;
       if (line.startsWith('- '))
         return `<div class="ln"><span class="prompt">›</span> ${inline(line.slice(2))}</div>`;
       if (line.trim() === '') return `<div class="ln">&nbsp;</div>`;
@@ -106,8 +107,7 @@ export function initTerminal(): void {
   const body0 = document.getElementById('ssh-body');
   const bar0 = document.getElementById('ssh-bar');
   const reconnect = document.getElementById('ssh-reconnect');
-  if (!win0 || !output0 || !inputline0 || !input0 || !typed0 || !prompt0 || !body0 || !bar0)
-    return;
+  if (!win0 || !output0 || !inputline0 || !input0 || !typed0 || !prompt0 || !body0 || !bar0) return;
   // Reassign to non-null locals: this preserves narrowing inside the closures
   // defined below (TS does not guarantee it on the original variables).
   const win = win0;
@@ -119,7 +119,12 @@ export function initTerminal(): void {
   const body = body0;
   const bar = bar0;
 
-  const cfg = readJSON<Cfg>('shell-cfg', { host: 'ludovic.toinel.com', user: 'user', links: {} });
+  const cfg = readJSON<Cfg>('shell-cfg', {
+    host: 'localhost',
+    user: 'user',
+    home: '/home/user',
+    links: {},
+  });
 
   /** Coarse pointer (touch) — used to skip auto-focus that would pop the keyboard. */
   const isTouch = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
@@ -132,8 +137,10 @@ export function initTerminal(): void {
   type VNode = VFile | VDir;
   const vdir = (children: Record<string, VNode> = {}): VDir => ({ type: 'dir', children });
 
-  /** Absolute path of the home directory; the shell starts here (shown as `~`). */
-  const HOME = '/home/ludovic';
+  /** Absolute path of the visitor's home directory (the shell starts here). */
+  const HOME = cfg.home;
+  /** Superuser home, reachable only after `su` (see the identity state below). */
+  const ROOT_HOME = '/root';
 
   // The whole fake filesystem mirrors the on-disk `root/` tree, built at compile
   // time and injected as #shell-fs (commands under /bin, documents under HOME).
@@ -143,6 +150,38 @@ export function initTerminal(): void {
   let cwd = HOME;
   let prevCwd = HOME;
 
+  // Identity: `su` pushes the current identity, becomes root and jumps to /root;
+  // `exit` pops back. `home` is the current user's `~` (HOME, or ROOT_HOME as root).
+  let isRoot = false;
+  let home = HOME;
+  const idStack: { isRoot: boolean; home: string; cwd: string; prevCwd: string }[] = [];
+
+  /** Becomes root (`su` / `su root`); other users are rejected. */
+  function su(target?: string): string | null {
+    const name = (target ?? 'root').trim() || 'root';
+    if (name !== 'root') return `su: l'utilisateur « ${name} » n'existe pas`;
+    if (isRoot) return null; // already root — no-op
+    idStack.push({ isRoot, home, cwd, prevCwd });
+    isRoot = true;
+    home = ROOT_HOME;
+    prevCwd = cwd;
+    cwd = ROOT_HOME;
+    return null;
+  }
+
+  /** Restores the previous identity (used by `exit`); false at the top level. */
+  function popIdentity(): boolean {
+    const prev = idStack.pop();
+    if (!prev) return false;
+    ({ isRoot, home, cwd, prevCwd } = prev);
+    return true;
+  }
+
+  /** A `/root`-subtree path the current user may not access (root-only). */
+  function denied(path: string): boolean {
+    return !isRoot && (path === ROOT_HOME || path.startsWith(ROOT_HOME + '/'));
+  }
+
   /** Splits an absolute path into its non-empty segments. */
   const segs = (p: string): string[] => p.split('/').filter(Boolean);
 
@@ -150,8 +189,8 @@ export function initTerminal(): void {
   function resolvePath(input: string): string {
     let p = (input ?? '').trim();
     if (p === '') return cwd;
-    if (p === '~') return HOME;
-    if (p.startsWith('~/')) p = HOME + p.slice(1);
+    if (p === '~') return home;
+    if (p.startsWith('~/')) p = home + p.slice(1);
     const acc = p.startsWith('/') ? [] : segs(cwd);
     for (const s of segs(p)) {
       if (s === '.') continue;
@@ -174,10 +213,10 @@ export function initTerminal(): void {
     return cur;
   }
 
-  /** Prompt-friendly label: HOME shows as `~`, paths below it as `~/sub`. */
+  /** Prompt-friendly label: the current home shows as `~`, paths below it as `~/sub`. */
   function pathLabel(path: string): string {
-    if (path === HOME) return '~';
-    if (path.startsWith(HOME + '/')) return '~' + path.slice(HOME.length);
+    if (path === home) return '~';
+    if (path.startsWith(home + '/')) return '~' + path.slice(home.length);
     return path;
   }
 
@@ -185,7 +224,9 @@ export function initTerminal(): void {
   function entryNames(kind: 'all' | 'dir' | 'file'): string[] {
     const n = nodeAt(cwd);
     if (n?.type !== 'dir') return [];
-    return Object.keys(n.children).filter((name) => kind === 'all' || n.children[name].type === kind);
+    return Object.keys(n.children).filter(
+      (name) => kind === 'all' || n.children[name].type === kind,
+    );
   }
 
   /** `ls` backend: lists a directory (or a single file), or returns an error. */
@@ -194,10 +235,13 @@ export function initTerminal(): void {
     error?: string;
   } {
     const path = resolvePath(arg ?? '');
+    if (denied(path)) return { error: `cannot open directory '${arg ?? path}': Permission denied` };
     const n = nodeAt(path);
     if (!n) return { error: `cannot access '${arg}': No such file or directory` };
     if (n.type === 'file')
-      return { entries: [{ name: path.split('/').pop() || path, type: 'file', size: n.content.length }] };
+      return {
+        entries: [{ name: path.split('/').pop() || path, type: 'file', size: n.content.length }],
+      };
     const entries = Object.keys(n.children)
       .sort((a, b) => a.localeCompare(b))
       .map((name) => {
@@ -210,6 +254,7 @@ export function initTerminal(): void {
   /** `cat` backend: reads a file (with implicit `.md`), or returns an error. */
   function readPath(arg: string): { content?: string; name?: string; error?: string } {
     let path = resolvePath(arg);
+    if (denied(path)) return { error: 'Permission denied' };
     let n = nodeAt(path);
     if (!n) {
       // Retry with implicit `.md`, or a name without its extension, in the parent dir.
@@ -239,7 +284,9 @@ export function initTerminal(): void {
 
   /** Changes directory (`-` = previous, empty = home); error string or `null`. */
   function chdir(arg?: string): string | null {
-    const target = arg === undefined || arg === '' ? HOME : arg === '-' ? prevCwd : resolvePath(arg);
+    const target =
+      arg === undefined || arg === '' ? home : arg === '-' ? prevCwd : resolvePath(arg);
+    if (denied(target)) return `cd: ${arg}: Permission denied`;
     const n = nodeAt(target);
     if (!n) return `cd: ${arg}: No such file or directory`;
     if (n.type !== 'dir') return `cd: ${arg}: Not a directory`;
@@ -250,11 +297,16 @@ export function initTerminal(): void {
 
   /* ----------------------------- prompt ----------------------------- */
 
-  /** Colored HTML prompt for the current directory (echo + input line). */
+  /** Colored HTML prompt for the current user & directory (echo + input line). */
   function promptHtml(): string {
+    // root: shows `root@host` and a red `#`; otherwise the configured user and `$`.
+    const user = isRoot ? `root@${cfg.host}` : cfg.user;
+    const sym = isRoot
+      ? '<span class="prompt" style="color:#ff6b6b">#</span>'
+      : '<span class="prompt">$</span>';
     // Trailing space is a non-breaking space: in the flex input line a normal
-    // trailing space would be collapsed, leaving no gap after the `$`.
-    return `<span class="prompt-user">${escapeHtml(cfg.user)}</span><span class="comment">:</span><span class="prompt-path">${escapeHtml(pathLabel(cwd))}</span><span class="prompt">$</span>&nbsp;`;
+    // trailing space would be collapsed, leaving no gap after the symbol.
+    return `<span class="prompt-user">${escapeHtml(user)}</span><span class="comment">:</span><span class="prompt-path">${escapeHtml(pathLabel(cwd))}</span>${sym}&nbsp;`;
   }
   /** Re-renders the static prompt element to match the current directory. */
   const refreshPrompt = (): void => {
@@ -298,7 +350,10 @@ export function initTerminal(): void {
 
   /** Prints raw, escaped text (no markdown) preserving whitespace — for plain files. */
   function printRaw(text: string): void {
-    const d = append(`<div class="ln out">${escapeHtml(text.replace(/\s+$/, ''))}</div>`, 'ssh-out reveal-line');
+    const d = append(
+      `<div class="ln out">${escapeHtml(text.replace(/\s+$/, ''))}</div>`,
+      'ssh-out reveal-line',
+    );
     requestAnimationFrame(() => d.classList.add('is-in'));
   }
 
@@ -338,7 +393,9 @@ export function initTerminal(): void {
     const val = input.value;
     const pos = input.selectionStart ?? val.length;
     typed.innerHTML =
-      escapeHtml(val.slice(0, pos)) + '<span class="ssh-caret"></span>' + escapeHtml(val.slice(pos));
+      escapeHtml(val.slice(0, pos)) +
+      '<span class="ssh-caret"></span>' +
+      escapeHtml(val.slice(pos));
   }
 
   /** Sets the input value and places the caret at the end, then re-renders. */
@@ -421,7 +478,11 @@ export function initTerminal(): void {
         document.documentElement.classList.toggle('amber', amber);
         localStorage.setItem('theme', amber ? 'amber' : 'green');
       },
-      exit: () => closeWin(),
+      su: (target?: string) => su(target),
+      // `exit` from an `su` shell returns to the previous user; at the top level it closes.
+      exit: () => {
+        if (!popIdentity()) closeWin();
+      },
       exec: (name: string, a: string[] = []) => commands[name]?.run(a),
     };
   }
@@ -520,9 +581,7 @@ export function initTerminal(): void {
   }
 
   // Keep the visible line (and caret position) in sync with the hidden input.
-  ['input', 'keyup', 'click', 'select'].forEach((ev) =>
-    input.addEventListener(ev, renderInput),
-  );
+  ['input', 'keyup', 'click', 'select'].forEach((ev) => input.addEventListener(ev, renderInput));
 
   input.addEventListener('keydown', async (e: KeyboardEvent) => {
     if (busy) {

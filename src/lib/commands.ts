@@ -26,7 +26,11 @@ export function parseCommand(raw: string): CmdDef {
   const lines = fm.split('\n');
   for (let i = 0; i < lines.length; i++) {
     if (/^js:\s*\|\s*$/.test(lines[i])) {
-      def.js = lines.slice(i + 1).map((l) => l.replace(/^ {2}/, '')).join('\n').trim();
+      def.js = lines
+        .slice(i + 1)
+        .map((l) => l.replace(/^ {2}/, ''))
+        .join('\n')
+        .trim();
       break;
     }
     const kv = lines[i].match(/^(\w+):\s*(.*)$/);

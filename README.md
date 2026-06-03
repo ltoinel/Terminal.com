@@ -12,7 +12,7 @@ grain, vignette, glow phosphore, curseur clignotant — tous désactivés sous
 
 ## Prérequis
 
-- Node.js ≥ 18.20 (testé avec Node 22)
+- Node.js ≥ 22.18 (exécution TypeScript native pour `scripts/` et les tests ; CI sur Node 22)
 
 ## Démarrer
 
@@ -23,52 +23,71 @@ npm run dev      # serveur de dev avec HMR -> http://localhost:4321
 
 ## Scripts
 
-| Script                  | Rôle                                                       |
-|-------------------------|------------------------------------------------------------|
-| `npm run dev`           | Serveur de développement (hot reload)                      |
-| `npm run build`         | Build statique optimisé → `dist/`                          |
-| `npm run preview`       | Prévisualise le build de `dist/`                           |
-| `npm run check`         | Vérification de types / diagnostics Astro                  |
-| `npm run upgrade`       | Liste les mises à jour de dépendances                      |
-| `npm run upgrade:apply` | Applique les mises à jour + rebuild                        |
+| Script                   | Rôle                                      |
+| ------------------------ | ----------------------------------------- |
+| `npm run dev`            | Serveur de développement (hot reload)     |
+| `npm run build`          | Build statique optimisé → `dist/`         |
+| `npm run preview`        | Prévisualise le build de `dist/`          |
+| `npm run check`          | Vérification de types / diagnostics Astro |
+| `npm run check:commands` | Valide les commandes (`root/bin/*.md`)    |
+| `npm test`               | Tests unitaires (Vitest)                  |
+| `npm run test:watch`     | Tests en mode watch                       |
+| `npm run lint`           | ESLint                                    |
+| `npm run format`         | Formate le code (Prettier)                |
+| `npm run format:check`   | Vérifie le formatage sans modifier        |
+| `npm run upgrade`        | Liste les mises à jour de dépendances     |
+| `npm run upgrade:apply`  | Applique les mises à jour + rebuild       |
+
+Toutes ces vérifications (`format:check`, `lint`, `check:commands`, `check`, `test`, `build`)
+tournent automatiquement en CI sur chaque _push_ et _pull request_ (voir `.github/workflows/ci.yml`).
 
 ## Structure
 
 ```
 public_html/
-├── astro.config.mjs          ← config Astro (site, sitemap, icônes, Tailwind)
+├── astro.config.mjs          ← config Astro (lit l'URL depuis site.config.ts)
 ├── src/
+│   ├── site.config.ts        ← ⭐ SOURCE UNIQUE : identité, SEO, shell, liens/profils
 │   ├── pages/index.astro     ← page d'accueil (terminal + bascule de thème)
-│   ├── layouts/Layout.astro  ← <head>, SEO, Open Graph, JSON-LD, thème, polices
-│   ├── components/           ← Terminal, ThemeToggle
-│   ├── home/                 ← ~ du visiteur : docs parcourus via ls/cat (about.md, projects.md…)
-│   ├── commands/             ← une commande = un markdown (frontmatter name/desc/js)
-│   ├── lib/terminal.ts       ← moteur du shell interactif (SSH, commandes, drag/resize)
-│   ├── data/                 ← données (SEO sameAs + liens de la commande `open`)
-│   │   ├── site.ts           ← identité, accroche, texte « À propos »
-│   │   ├── socials.ts        ← réseaux sociaux + sameAs SEO
-│   │   └── projects.ts       ← cartes de la grille Projets
-│   ├── assets/               ← images optimisées au build (portrait…)
+│   ├── pages/[command].astro ← une page statique par commande/document (deep-links)
+│   ├── pages/sitemap.xml.ts  ← sitemap généré
+│   ├── layouts/Layout.astro  ← <head>, SEO, Open Graph, thème, polices
+│   ├── components/           ← Terminal, ThemeToggle, JsonLd, MatrixRain
+│   ├── lib/terminal.ts       ← moteur du shell (FS virtuel, commandes, drag/resize)
+│   ├── lib/content.ts        ← parcourt root/ au build → arbre FS + registre de commandes
+│   ├── lib/commands.ts       ← parsing + validation des commandes (partagé)
 │   └── styles/global.css     ← Tailwind + thème terminal (variables CSS, effets CRT)
-├── public/                   ← servi tel quel (favicon, og-image, robots, vCard, .well-known…)
+├── root/                     ← ⭐ LE FAUX FILESYSTEM (arborescence réelle sur disque)
+│   ├── bin/                  ← une commande = un markdown (frontmatter name/desc/js)
+│   ├── home/ludovic/         ← ~ du visiteur : docs parcourus via ls/cat (about.md…)
+│   ├── etc/, var/, usr/, …   ← répertoires « décor » explorables
+├── scripts/check-commands.ts ← validation standalone des commandes (npm run check:commands)
+├── tests/                    ← tests Vitest (parsing, validation, rendu)
+├── public/                   ← servi tel quel (favicons, robots, vCard, .well-known…)
 └── dist/                     ← SORTIE GÉNÉRÉE (= racine web à servir)
 ```
 
 ## Modifier le contenu
 
-Le contenu affiché au visiteur vit dans **`src/home/`** et **`src/commands/`**
-(voir la section « Shell interactif » ci-dessous).
-
-Les fichiers **`src/data/`** sont de la **configuration** (pas du contenu affiché) :
-
-- **`site.ts`** : identité (nom, rôle, entreprise, accroche, bio) — alimente le
-  `<title>`, les meta, l'Open Graph et le JSON-LD.
-- **`socials.ts`** : réseaux (label + URL). `sameAs: true` injecte le lien dans
-  les données structurées schema.org, et chaque entrée devient une cible de `open`.
-- **`projects.ts`** : liens supplémentaires (label + URL) pour la commande `open`.
+- **Identité, SEO et profils** → **`src/site.config.ts`** : nom, rôle, entreprise,
+  accroche, bio, URL, image OG, handle Twitter, token Google, et la liste `links`
+  (chaque entrée alimente la commande `open`, le `sameAs` schema.org, ou les deux).
+- **Contenu parcouru** → l'arborescence **`root/`** (voir « Shell interactif »).
 
 L'unique icône (bascule de thème) utilise [astro-icon](https://www.astroicon.dev/)
 avec le jeu `lucide`.
+
+## Réutiliser ce portail
+
+1. Éditez **`src/site.config.ts`** (identité, URL, profils, host/user du shell).
+2. Remplacez le contenu de **`root/home/ludovic/`** (vos documents `.md`) et,
+   au besoin, les fichiers « décor » de `root/etc`, `root/var`, etc.
+3. Ajoutez/retirez des commandes dans **`root/bin/`** (voir ci-dessous).
+4. Remplacez les `public/favicon*` et `public/portrait.jpg`.
+5. `npm run lint && npm test && npm run build`.
+
+> Le répertoire de home (`shell.home`) doit rester cohérent avec l'arborescence
+> `root/home/...`.
 
 ## Shell interactif
 
@@ -79,15 +98,16 @@ La fenêtre est **déplaçable** (glisser la barre de titre), **redimensionnable
 (poignée en bas à droite) et possède des boutons fermer / réduire / agrandir
 (double-clic sur la barre = agrandir).
 
-**Le contenu vit dans deux répertoires :**
+**Le contenu vit dans l'arborescence `root/` (= le faux filesystem) :**
 
-- **`src/home/`** = le répertoire `~` du visiteur : documents parcourus avec
-  `ls` / `cat` (`about.md`, `projects.md`, `skills.md`, `contact.md`).
-  Pour **ajouter un document**, créez `src/home/mon-fichier.md` : il devient
+- **`root/home/ludovic/`** = le répertoire `~` du visiteur : documents parcourus
+  avec `ls` / `cat` (`about.md`, `projects.md`, `skills.md`, `contact.md`).
+  Pour **ajouter un document**, créez `root/home/ludovic/mon-fichier.md` : il devient
   accessible via `cat mon-fichier.md` (ou juste `mon-fichier`) et apparaît dans `ls`.
 
-- **`src/commands/`** = **une commande = un markdown** ; `terminal.ts` découvre
-  automatiquement les commandes en listant ce répertoire. Frontmatter :
+- **`root/bin/`** = **une commande = un markdown** ; le build (`content.ts`) découvre
+  automatiquement les commandes en listant ce répertoire (elles apparaissent aussi
+  dans `/bin`). Frontmatter :
   - `name` : nom de la commande
   - `desc` : description (affichée par `help`)
   - `js: |` (optionnel) : code JavaScript exécuté si la commande est **dynamique**
@@ -102,19 +122,26 @@ La fenêtre est **déplaçable** (glisser la barre de titre), **redimensionnable
   ---
   ```
 
-  Le `js` reçoit un objet **`ctx`** : `args`, `body`, `cfg`, `history`, `files`,
-  `commands`, et des helpers `print/line/error/append/escape/fileList/resolveFile/
-  open/theme/clear/exit/exec`. Une commande statique (sans `js`) affiche juste son corps.
+  Le `js` reçoit un objet **`ctx`** : `args`, `body`, `cfg`, `history`, `commands`,
+  les helpers d'affichage `print/line/raw/error/append/escape`, de navigation
+  `cwd/cwdLabel/cd/list/read/fileList/resolveFile`, et `open/theme/su/clear/exit/exec`.
+  Une commande statique (sans `js`) affiche juste son corps.
+
+  > Les fichiers `root/bin/*.md` sont validés au build et par `npm run check:commands`
+  > (frontmatter, nom, **syntaxe JS** sans exécution, doublons).
 
 Format markdown supporté : `# Titre`, `## Sous-titre`, `> note`, `- puce`,
 `**gras**`, `` `code` `` et liens `[texte](https://…)` ou `[…](mailto:…)`.
 
-> ⚠️ Les commandes dynamiques s'exécutent via `new Function` — une **CSP stricte**
-> (`unsafe-eval` interdit) les casserait. Aucune CSP n'est configurée par défaut.
+> ⚠️ Les commandes dynamiques s'exécutent via `new Function` (eval). N'autorisez
+> donc que des commandes **de confiance**. Une **CSP stricte** (`unsafe-eval`
+> interdit) les casserait ; aucune CSP n'est configurée par défaut.
 
-**Commandes intégrées** : `help`, `ls`/`ll`, `cat`, `whoami`, `motd`, `mail`, `open <nom>`,
-`theme [crt|amber]`, `neofetch`, `date`, `pwd`, `echo`, `uname`, `history`,
-`clear`, `sudo`, `exit`. Plus : historique persistant (↑/↓), autocomplétion (Tab),
+**Commandes intégrées** : `help`, `ls`/`ll`, `cd`, `pwd`, `cat`, `whoami`, `motd`,
+`mail`, `open <nom>`, `theme [crt|amber]`, `neofetch`, `date`, `echo`, `uname`,
+`nslookup`, `ping`, `su`, `history`, `clear`/`cls`, `sudo`, `exit`. `su` simule un
+passage en root (invite `#`, accès à `/root`) ; `exit` revient à l'utilisateur.
+Plus : navigation dans l'arborescence (`cd`/`pwd`), historique persistant (↑/↓), autocomplétion (Tab),
 édition de ligne (`Ctrl+A/E/U/K/W`), `Ctrl+L` (clear), `Ctrl+C`.
 
 Le moteur est dans `src/lib/terminal.ts` ; la fenêtre dans `src/components/Terminal.astro`.
@@ -126,17 +153,14 @@ Le moteur est dans `src/lib/terminal.ts` ; la fenêtre dans `src/components/Term
 
 ## SEO & données structurées
 
-Gérés dans `src/layouts/Layout.astro`, générés depuis `src/data/` :
+Générés depuis **`src/site.config.ts`** ; le `<head>` est dans `src/layouts/Layout.astro`
+et le bloc structuré dans `src/components/JsonLd.astro` :
 
 - `<title>`, meta description, canonical, `theme-color`
-- Open Graph + Twitter Card (image : `public/og-image.jpg`, 1200×630)
+- Open Graph + Twitter Card (image : `public/portrait.jpg`, 800×800)
 - JSON-LD `schema.org/Person` (jobTitle, worksFor, birthPlace, **sameAs** incluant
-  Wikidata + tous les réseaux)
-- Sitemap généré automatiquement (`/sitemap-index.xml`) + `robots.txt`
-
-> Pour régénérer l'image Open Graph après un changement de photo/texte, voir le
-> bloc ImageMagick dans l'historique, ou remplacez simplement `public/og-image.jpg`
-> (1200×630).
+  Wikidata + les profils marqués `sameAs` dans `site.config.ts`)
+- Sitemap généré (`/sitemap.xml`) + `robots.txt`
 
 ## Déploiement
 

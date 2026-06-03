@@ -30,7 +30,9 @@ const rawEntries = Object.entries(
     eager: true,
     exhaustive: true,
   }),
-).map(([path, raw]) => [path.replace(/^.*\/root\//, ''), raw as string] as [string, string]);
+  // Strip everything up to the FIRST `root/` (lazy: the project root dir, even when
+  // a child is itself named `root`, e.g. `/root/`).
+).map(([path, raw]) => [path.replace(/^.*?\/root\//, ''), raw as string] as [string, string]);
 
 /** The whole fake filesystem as a nested tree (injected as `#shell-fs`). */
 export const tree: VDir = (() => {
@@ -70,12 +72,25 @@ export const commandDefs: CmdDef[] = (() => {
 })();
 
 /** Home documents (`~`) eligible for a landing page: the `.md` files in HOME. */
-const homeDir = tree.children.home?.type === 'dir' ? tree.children.home.children.ludovic : undefined;
+const homeDir =
+  tree.children.home?.type === 'dir' ? tree.children.home.children.ludovic : undefined;
 const homeDocs =
   homeDir?.type === 'dir' ? Object.keys(homeDir.children).filter((n) => n.endsWith('.md')) : [];
 
 /** Commands that don't make good standalone landing pages (control / need args). */
-const NO_LINK = new Set(['clear', 'cls', 'exit', 'boot', 'll', 'echo', 'cat', 'cd', 'history', 'theme']);
+const NO_LINK = new Set([
+  'clear',
+  'cls',
+  'exit',
+  'boot',
+  'll',
+  'echo',
+  'cat',
+  'cd',
+  'su',
+  'history',
+  'theme',
+]);
 
 export interface Route {
   /** URL slug, also the command/document run on load (e.g. `whoami`, `about`). */

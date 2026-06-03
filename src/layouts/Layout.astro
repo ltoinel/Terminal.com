@@ -1,6 +1,7 @@
 ---
 import MatrixRain from '../components/MatrixRain.astro';
 import JsonLd from '../components/JsonLd.astro';
+import { site } from '../site.config.ts';
 import '../styles/global.css';
 
 interface Props {
@@ -8,34 +9,15 @@ interface Props {
   description?: string;
 }
 
-// Site identity — single source of truth for meta tags and structured data.
-const SITE = {
-  name: 'Ludovic Toinel',
-  firstName: 'Ludovic',
-  lastName: 'Toinel',
-  role: 'Architecte Fullstack & Innovation',
-  company: 'Capgemini',
-  companyUrl: 'https://www.capgemini.com/',
-  tagline:
-    'Architecte Fullstack & Innovation chez Capgemini. Blogueur, hacker, photographe, pilote de drones, voyageur et musicien.',
-  url: 'https://ludovic.toinel.com',
-  wikidata: 'https://www.wikidata.org/wiki/Q140004299',
-  birthPlace: 'Lyon',
-  locale: 'fr_FR',
-  lang: 'fr',
-};
+const { title = `${site.name} — ${site.role} @ ${site.company}`, description = site.tagline } =
+  Astro.props;
 
-const {
-  title = `${SITE.name} — ${SITE.role} @ ${SITE.company}`,
-  description = SITE.tagline,
-} = Astro.props;
-
-const canonical = new URL(Astro.url.pathname, SITE.url).href;
-const ogImage = new URL('/portrait.jpg', SITE.url).href;
+const canonical = new URL(Astro.url.pathname, site.url).href;
+const ogImage = new URL(site.ogImage, site.url).href;
 ---
 
 <!doctype html>
-<html lang={SITE.lang}>
+<html lang={site.lang}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -49,9 +31,13 @@ const ogImage = new URL('/portrait.jpg', SITE.url).href;
     <title>{title}</title>
     <meta name="title" content={title} />
     <meta name="description" content={description} />
-    <meta name="author" content={SITE.name} />
+    <meta name="author" content={site.name} />
     <meta name="robots" content="index, follow, max-image-preview:large" />
-    <meta name="google-site-verification" content="2gYYxN0DAxC3iK23exWNrujGcR9AmqtKM87J2GLkN5o" />
+    {
+      site.googleSiteVerification && (
+        <meta name="google-site-verification" content={site.googleSiteVerification} />
+      )
+    }
     <meta name="theme-color" content="#080b09" />
 
     <!-- Open Graph -->
@@ -63,22 +49,23 @@ const ogImage = new URL('/portrait.jpg', SITE.url).href;
     <meta property="og:image:width" content="800" />
     <meta property="og:image:height" content="800" />
     <meta property="og:image:type" content="image/jpeg" />
-    <meta property="og:image:alt" content={`Portrait de ${SITE.name}`} />
-    <meta property="og:locale" content={SITE.locale} />
-    <meta property="og:site_name" content={SITE.name} />
-    <meta property="profile:first_name" content={SITE.firstName} />
-    <meta property="profile:last_name" content={SITE.lastName} />
+    <meta property="og:image:alt" content={`Portrait de ${site.name}`} />
+    <meta property="og:locale" content={site.locale} />
+    <meta property="og:site_name" content={site.name} />
+    <meta property="profile:first_name" content={site.firstName} />
+    <meta property="profile:last_name" content={site.lastName} />
     <meta property="profile:gender" content="male" />
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary" />
-    <meta name="twitter:site" content="@ltoinel" />
-    <meta name="twitter:creator" content="@ltoinel" />
+    <meta name="twitter:site" content={site.twitter} />
+    <meta name="twitter:creator" content={site.twitter} />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
 
-    <link rel="me" href={SITE.wikidata} />
+    <link rel="me" href={site.wikidata} />
+    <link rel="author" href="/humans.txt" />
 
     <!-- Fonts: VT323 (CRT) + IBM Plex Mono (body) -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -89,7 +76,7 @@ const ogImage = new URL('/portrait.jpg', SITE.url).href;
     />
 
     <!-- schema.org structured data -->
-    <JsonLd site={SITE} image={ogImage} />
+    <JsonLd />
 
     <!-- Anti-FOUC: flag JS (reveals the terminal) and apply the theme
          (`.amber` only if chosen) before first paint -->
