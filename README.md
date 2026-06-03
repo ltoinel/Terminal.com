@@ -1,173 +1,173 @@
 # ludovic.toinel.com
 
-Portail personnel — **[Astro](https://astro.build) + [Tailwind CSS](https://tailwindcss.com) v4**.
-Site statique, **esthétique terminal / phosphore**, zéro JS de framework, SEO et
-données structurées schema.org intégrés.
+Personal portal — **[Astro](https://astro.build) + [Tailwind CSS](https://tailwindcss.com) v4**.
+Static site, **terminal / phosphor aesthetic**, zero framework JS, with built-in SEO
+and schema.org structured data.
 
-**Design** : fenêtre de terminal unique. Deux thèmes : **vert CRT** (avec fond
-« Matrix » digital-rain) et **ambre monochrome**, bascule en haut à droite.
-Polices **VT323** (affichage CRT) + **IBM Plex Mono** (corps). Effets : scanlines,
-grain, vignette, glow phosphore, curseur clignotant — tous désactivés sous
+**Design**: a single terminal window. Two themes: **CRT green** (with a "Matrix"
+digital-rain background) and **amber monochrome**, toggled from the top right.
+Fonts **VT323** (CRT display) + **IBM Plex Mono** (body). Effects: scanlines,
+grain, vignette, phosphor glow, blinking cursor — all disabled under
 `prefers-reduced-motion`.
 
-## Prérequis
+## Requirements
 
-- Node.js ≥ 22.18 (exécution TypeScript native pour `scripts/` et les tests ; CI sur Node 22)
+- Node.js ≥ 22.18 (native TypeScript execution for `scripts/` and the tests; CI on Node 22)
 
-## Démarrer
+## Getting started
 
 ```bash
 npm install
-npm run dev      # serveur de dev avec HMR -> http://localhost:4321
+npm run dev      # dev server with HMR -> http://localhost:4321
 ```
 
 ## Scripts
 
-| Script                   | Rôle                                      |
-| ------------------------ | ----------------------------------------- |
-| `npm run dev`            | Serveur de développement (hot reload)     |
-| `npm run build`          | Build statique optimisé → `dist/`         |
-| `npm run preview`        | Prévisualise le build de `dist/`          |
-| `npm run check`          | Vérification de types / diagnostics Astro |
-| `npm run check:commands` | Valide les commandes (`root/bin/*.md`)    |
-| `npm test`               | Tests unitaires (Vitest)                  |
-| `npm run test:watch`     | Tests en mode watch                       |
-| `npm run lint`           | ESLint                                    |
-| `npm run format`         | Formate le code (Prettier)                |
-| `npm run format:check`   | Vérifie le formatage sans modifier        |
-| `npm run upgrade`        | Liste les mises à jour de dépendances     |
-| `npm run upgrade:apply`  | Applique les mises à jour + rebuild       |
+| Script                   | Purpose                                 |
+| ------------------------ | --------------------------------------- |
+| `npm run dev`            | Development server (hot reload)         |
+| `npm run build`          | Optimized static build → `dist/`        |
+| `npm run preview`        | Preview the `dist/` build               |
+| `npm run check`          | Type checking / Astro diagnostics       |
+| `npm run check:commands` | Validate the commands (`root/bin/*.md`) |
+| `npm test`               | Unit tests (Vitest)                     |
+| `npm run test:watch`     | Tests in watch mode                     |
+| `npm run lint`           | ESLint                                  |
+| `npm run format`         | Format the code (Prettier)              |
+| `npm run format:check`   | Check formatting without writing        |
+| `npm run upgrade`        | List dependency updates                 |
+| `npm run upgrade:apply`  | Apply updates + rebuild                 |
 
-Toutes ces vérifications (`format:check`, `lint`, `check:commands`, `check`, `test`, `build`)
-tournent automatiquement en CI sur chaque _push_ et _pull request_ (voir `.github/workflows/ci.yml`).
+All of these checks (`format:check`, `lint`, `check:commands`, `check`, `test`, `build`)
+run automatically in CI on every _push_ and _pull request_ (see `.github/workflows/ci.yml`).
 
 ## Structure
 
 ```
 public_html/
-├── astro.config.mjs          ← config Astro (lit l'URL depuis site.config.ts)
+├── astro.config.mjs          ← Astro config (reads the URL from site.config.ts)
 ├── src/
-│   ├── site.config.ts        ← ⭐ SOURCE UNIQUE : identité, SEO, shell, liens/profils
-│   ├── pages/index.astro     ← page d'accueil (terminal + bascule de thème)
-│   ├── pages/[command].astro ← une page statique par commande/document (deep-links)
-│   ├── pages/sitemap.xml.ts  ← sitemap généré
-│   ├── layouts/Layout.astro  ← <head>, SEO, Open Graph, thème, polices
+│   ├── site.config.ts        ← ⭐ SINGLE SOURCE: identity, SEO, shell, links/profiles
+│   ├── pages/index.astro     ← home page (terminal + theme toggle)
+│   ├── pages/[command].astro ← one static page per command/document (deep links)
+│   ├── pages/sitemap.xml.ts  ← generated sitemap
+│   ├── layouts/Layout.astro  ← <head>, SEO, Open Graph, theme, fonts
 │   ├── components/           ← Terminal, ThemeToggle, JsonLd, MatrixRain
-│   ├── lib/terminal.ts       ← moteur du shell (FS virtuel, commandes, drag/resize)
-│   ├── lib/content.ts        ← parcourt root/ au build → arbre FS + registre de commandes
-│   ├── lib/commands.ts       ← parsing + validation des commandes (partagé)
-│   └── styles/global.css     ← Tailwind + thème terminal (variables CSS, effets CRT)
-├── root/                     ← ⭐ LE FAUX FILESYSTEM (arborescence réelle sur disque)
-│   ├── bin/                  ← une commande = un markdown (frontmatter name/desc/js)
-│   ├── home/ludovic/         ← ~ du visiteur : docs parcourus via ls/cat (about.md…)
-│   ├── etc/, var/, usr/, …   ← répertoires « décor » explorables
-├── scripts/check-commands.ts ← validation standalone des commandes (npm run check:commands)
-├── tests/                    ← tests Vitest (parsing, validation, rendu)
-├── public/                   ← servi tel quel (favicons, robots, vCard, .well-known…)
-└── dist/                     ← SORTIE GÉNÉRÉE (= racine web à servir)
+│   ├── lib/terminal.ts       ← shell engine (virtual FS, commands, drag/resize)
+│   ├── lib/content.ts        ← walks root/ at build time → FS tree + command registry
+│   ├── lib/commands.ts       ← command parsing + validation (shared)
+│   └── styles/global.css     ← Tailwind + terminal theme (CSS variables, CRT effects)
+├── root/                     ← ⭐ THE FAKE FILESYSTEM (a real on-disk directory tree)
+│   ├── bin/                  ← one command = one markdown (frontmatter name/desc/js)
+│   ├── home/ludovic/         ← visitor's ~ : docs browsed via ls/cat (about.md…)
+│   ├── etc/, var/, usr/, …   ← explorable "decor" directories
+├── scripts/check-commands.ts ← standalone command validation (npm run check:commands)
+├── tests/                    ← Vitest tests (parsing, validation, rendering)
+├── public/                   ← served as-is (favicons, robots, vCard, .well-known…)
+└── dist/                     ← GENERATED OUTPUT (= the web root to serve)
 ```
 
-## Modifier le contenu
+## Editing the content
 
-- **Identité, SEO et profils** → **`src/site.config.ts`** : nom, rôle, entreprise,
-  accroche, bio, URL, image OG, handle Twitter, token Google, et la liste `links`
-  (chaque entrée alimente la commande `open`, le `sameAs` schema.org, ou les deux).
-- **Contenu parcouru** → l'arborescence **`root/`** (voir « Shell interactif »).
+- **Identity, SEO and profiles** → **`src/site.config.ts`**: name, role, company,
+  tagline, bio, URL, OG image, Twitter handle, Google token, and the `links` list
+  (each entry feeds the `open` command, the schema.org `sameAs`, or both).
+- **Browsed content** → the **`root/`** tree (see "Interactive shell").
 
-L'unique icône (bascule de thème) utilise [astro-icon](https://www.astroicon.dev/)
-avec le jeu `lucide`.
+The single icon (theme toggle) uses [astro-icon](https://www.astroicon.dev/)
+with the `lucide` set.
 
-## Réutiliser ce portail
+## Reusing this portal
 
-1. Éditez **`src/site.config.ts`** (identité, URL, profils, host/user du shell).
-2. Remplacez le contenu de **`root/home/ludovic/`** (vos documents `.md`) et,
-   au besoin, les fichiers « décor » de `root/etc`, `root/var`, etc.
-3. Ajoutez/retirez des commandes dans **`root/bin/`** (voir ci-dessous).
-4. Remplacez les `public/favicon*` et `public/portrait.jpg`.
+1. Edit **`src/site.config.ts`** (identity, URL, profiles, shell host/user).
+2. Replace the contents of **`root/home/ludovic/`** (your `.md` documents) and,
+   if needed, the "decor" files under `root/etc`, `root/var`, etc.
+3. Add/remove commands in **`root/bin/`** (see below).
+4. Replace `public/favicon*` and `public/portrait.jpg`.
 5. `npm run lint && npm test && npm run build`.
 
-> Le répertoire de home (`shell.home`) doit rester cohérent avec l'arborescence
-> `root/home/...`.
+> The home directory (`shell.home`) must stay consistent with the
+> `root/home/...` tree.
 
-## Shell interactif
+## Interactive shell
 
-À l'ouverture, le portail simule une **connexion SSH** à `ludovic.toinel.com`
-et affiche le message du jour (`motd`), puis rend la main. Le visiteur tape
-ensuite ses commandes pour explorer le contenu.
-La fenêtre est **déplaçable** (glisser la barre de titre), **redimensionnable**
-(poignée en bas à droite) et possède des boutons fermer / réduire / agrandir
-(double-clic sur la barre = agrandir).
+On load, the portal simulates an **SSH connection** to `ludovic.toinel.com`
+and prints the message of the day (`motd`), then hands over control. The visitor
+then types commands to explore the content.
+The window is **draggable** (grab the title bar), **resizable** (handle at the
+bottom right) and has close / minimize / maximize buttons (double-click the bar
+to maximize).
 
-**Le contenu vit dans l'arborescence `root/` (= le faux filesystem) :**
+**The content lives in the `root/` tree (= the fake filesystem):**
 
-- **`root/home/ludovic/`** = le répertoire `~` du visiteur : documents parcourus
-  avec `ls` / `cat` (`about.md`, `projects.md`, `skills.md`, `contact.md`).
-  Pour **ajouter un document**, créez `root/home/ludovic/mon-fichier.md` : il devient
-  accessible via `cat mon-fichier.md` (ou juste `mon-fichier`) et apparaît dans `ls`.
+- **`root/home/ludovic/`** = the visitor's `~` directory: documents browsed
+  with `ls` / `cat` (`about.md`, `projects.md`, `skills.md`, `contact.md`).
+  To **add a document**, create `root/home/ludovic/my-file.md`: it becomes
+  reachable via `cat my-file.md` (or just `my-file`) and shows up in `ls`.
 
-- **`root/bin/`** = **une commande = un markdown** ; le build (`content.ts`) découvre
-  automatiquement les commandes en listant ce répertoire (elles apparaissent aussi
-  dans `/bin`). Frontmatter :
-  - `name` : nom de la commande
-  - `desc` : description (affichée par `help`)
-  - `js: |` (optionnel) : code JavaScript exécuté si la commande est **dynamique**
-  - le **corps markdown** : affiché tel quel si la commande est **statique** (pas de `js`)
+- **`root/bin/`** = **one command = one markdown**; the build (`content.ts`)
+  discovers commands automatically by listing this directory (they also appear
+  in `/bin`). Frontmatter:
+  - `name`: command name
+  - `desc`: description (shown by `help`)
+  - `js: |` (optional): JavaScript executed if the command is **dynamic**
+  - the **markdown body**: shown as-is if the command is **static** (no `js`)
 
   ```markdown
   ---
   name: date
-  desc: date et heure
+  desc: date and time
   js: |
     ctx.line(new Date().toString());
   ---
   ```
 
-  Le `js` reçoit un objet **`ctx`** : `args`, `body`, `cfg`, `history`, `commands`,
-  les helpers d'affichage `print/line/raw/error/append/escape`, de navigation
-  `cwd/cwdLabel/cd/list/read/fileList/resolveFile`, et `open/theme/su/clear/exit/exec`.
-  Une commande statique (sans `js`) affiche juste son corps.
+  The `js` receives a **`ctx`** object: `args`, `body`, `cfg`, `history`, `commands`,
+  the display helpers `print/line/raw/error/append/escape`, the navigation helpers
+  `cwd/cwdLabel/cd/list/read/fileList/resolveFile`, and `open/theme/su/clear/exit/exec`.
+  A static command (no `js`) simply prints its body.
 
-  > Les fichiers `root/bin/*.md` sont validés au build et par `npm run check:commands`
-  > (frontmatter, nom, **syntaxe JS** sans exécution, doublons).
+  > Files in `root/bin/*.md` are validated at build time and by `npm run check:commands`
+  > (frontmatter, name, **JS syntax** without executing it, duplicates).
 
-Format markdown supporté : `# Titre`, `## Sous-titre`, `> note`, `- puce`,
-`**gras**`, `` `code` `` et liens `[texte](https://…)` ou `[…](mailto:…)`.
+Supported markdown: `# Title`, `## Subtitle`, `> note`, `- bullet`,
+`**bold**`, `` `code` `` and links `[text](https://…)` or `[…](mailto:…)`.
 
-> ⚠️ Les commandes dynamiques s'exécutent via `new Function` (eval). N'autorisez
-> donc que des commandes **de confiance**. Une **CSP stricte** (`unsafe-eval`
-> interdit) les casserait ; aucune CSP n'est configurée par défaut.
+> ⚠️ Dynamic commands run via `new Function` (eval). Only allow **trusted**
+> commands. A **strict CSP** (`unsafe-eval` forbidden) would break them; no CSP
+> is configured by default.
 
-**Commandes intégrées** : `help`, `ls`/`ll`, `cd`, `pwd`, `cat`, `whoami`, `motd`,
-`mail`, `open <nom>`, `theme [crt|amber]`, `neofetch`, `date`, `echo`, `uname`,
-`nslookup`, `ping`, `su`, `history`, `clear`/`cls`, `sudo`, `exit`. `su` simule un
-passage en root (invite `#`, accès à `/root`) ; `exit` revient à l'utilisateur.
-Plus : navigation dans l'arborescence (`cd`/`pwd`), historique persistant (↑/↓), autocomplétion (Tab),
-édition de ligne (`Ctrl+A/E/U/K/W`), `Ctrl+L` (clear), `Ctrl+C`.
+**Built-in commands**: `help`, `ls`/`ll`, `cd`, `pwd`, `cat`, `whoami`, `motd`,
+`mail`, `open <name>`, `theme [crt|amber]`, `neofetch`, `date`, `echo`, `uname`,
+`nslookup`, `ping`, `checkip`, `su`, `history`, `clear`/`cls`, `sudo`, `exit`. `su` simulates
+switching to root (a `#` prompt, access to `/root`); `exit` returns to the user.
+Plus: tree navigation (`cd`/`pwd`), persistent history (↑/↓), autocompletion (Tab),
+line editing (`Ctrl+A/E/U/K/W`), `Ctrl+L` (clear), `Ctrl+C`.
 
-Le moteur est dans `src/lib/terminal.ts` ; la fenêtre dans `src/components/Terminal.astro`.
+The engine is in `src/lib/terminal.ts`; the window in `src/components/Terminal.astro`.
 
-> **SEO** : le terminal nécessite JavaScript (pas de fallback statique). Le
-> référencement repose donc sur le `<head>` : `<title>`, meta description,
-> Open Graph, Twitter Card et surtout le **JSON-LD `Person`** (rendus côté serveur,
-> donc lisibles sans exécuter de JS). Un visiteur **sans JS** voit une page vide.
+> **SEO**: the terminal requires JavaScript (no static fallback). Search ranking
+> therefore relies on the `<head>`: `<title>`, meta description, Open Graph,
+> Twitter Card and above all the **`Person` JSON-LD** (server-rendered, so
+> readable without running JS). A visitor **without JS** sees a blank page.
 
-## SEO & données structurées
+## SEO & structured data
 
-Générés depuis **`src/site.config.ts`** ; le `<head>` est dans `src/layouts/Layout.astro`
-et le bloc structuré dans `src/components/JsonLd.astro` :
+Generated from **`src/site.config.ts`**; the `<head>` lives in `src/layouts/Layout.astro`
+and the structured-data block in `src/components/JsonLd.astro`:
 
 - `<title>`, meta description, canonical, `theme-color`
-- Open Graph + Twitter Card (image : `public/portrait.jpg`, 800×800)
-- JSON-LD `schema.org/Person` (jobTitle, worksFor, birthPlace, **sameAs** incluant
-  Wikidata + les profils marqués `sameAs` dans `site.config.ts`)
-- Sitemap généré (`/sitemap.xml`) + `robots.txt`
+- Open Graph + Twitter Card (image: `public/portrait.jpg`, 800×800)
+- `schema.org/Person` JSON-LD (jobTitle, worksFor, birthPlace, **sameAs** including
+  Wikidata + the profiles flagged `sameAs` in `site.config.ts`)
+- Generated sitemap (`/sitemap.xml`) + `robots.txt`
 
-## Déploiement
+## Deployment
 
-⚠️ La **racine web (DocumentRoot)** doit désormais pointer vers **`dist/`**.
-Les anciens fichiers Bootstrap (index.html, style.css, vendors/…) ont été
-supprimés de la racine : tant que le DocumentRoot n'est pas basculé sur `dist/`,
-le site live n'est plus servi.
+⚠️ The **web root (DocumentRoot)** must now point to **`dist/`**.
+The old Bootstrap files (index.html, style.css, vendors/…) have been removed from
+the root: until the DocumentRoot is switched to `dist/`, the live site is no
+longer served.
 
 ```bash
 npm install && npm run build   # -> dist/

@@ -1,5 +1,5 @@
-NAME="LudovicOS"
-PRETTY_NAME="LudovicOS phosphor 1.0"
-ID=ludovicos
+NAME="LudOs"
+PRETTY_NAME="LudOs phosphor 1.0"
+ID=ludos
 VERSION="1.0 (phosphor)"
 HOME_URL="https://ludovic.toinel.com"

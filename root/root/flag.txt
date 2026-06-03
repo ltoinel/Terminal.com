@@ -1,6 +1,6 @@
-🏴‍☠️  Tu es root sur LudovicOS.
+🏴‍☠️  Tu es root sur LudOs.
 
-Pas de secret ici — juste du phosphore et un clin d'œil.
+Pas de secret ici.
 Si tu lis ces lignes, c'est que tu sais ce qu'est un `su`. Respect.
 
 Reviens à toi avec `exit`.

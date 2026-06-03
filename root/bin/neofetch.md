@@ -6,7 +6,7 @@ js: |
   const info = [
     ['user', ctx.cfg.user],
     ['host', ctx.cfg.host],
-    ['os', 'LudovicOS · phosphor'],
+    ['os', 'LudOs · phosphor'],
     ['shell', 'ltsh 1.0'],
     ['theme', document.documentElement.classList.contains('amber') ? 'amber' : 'crt-green'],
     ['roles', 'architecte · hacker · photographe'],

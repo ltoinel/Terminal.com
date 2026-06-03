@@ -373,6 +373,16 @@ html.amber {
   white-space: pre-wrap;
   word-break: break-word;
 }
+/* ASCII/blocks art: force a monospace with full box-drawing & block-element
+   coverage (IBM Plex Mono lacks them, which breaks alignment), and tighten the
+   line-height so solid blocks connect vertically. */
+.ssh-body .ln.ascii-art {
+  font-family:
+    ui-monospace, 'DejaVu Sans Mono', 'Cascadia Mono', 'Consolas', Menlo, 'Liberation Mono',
+    monospace;
+  line-height: 1.05;
+  word-break: normal;
+}
 .ssh-out {
   margin: 0.15rem 0 0.6rem;
 }

@@ -314,6 +314,26 @@ export function initTerminal(): void {
   };
   refreshPrompt();
 
+  /**
+   * Reads one line interactively: shows `question` as the prompt, reveals the
+   * input and resolves with what the user types when they press Enter. Used by
+   * commands (via `ctx.ask`) — e.g. the `boot` yes/no connection confirmation.
+   */
+  function readLine(question: string): Promise<string> {
+    promptEl.innerHTML = `<span class="out">${escapeHtml(question)}</span>&nbsp;`;
+    input.value = '';
+    inputline.hidden = false;
+    renderInput();
+    scrollEnd();
+    if (!isTouch) input.focus();
+    return new Promise((resolve) => {
+      pendingRead = (value) => {
+        inputline.hidden = true;
+        resolve(value);
+      };
+    });
+  }
+
   // Command history, persisted across visits in localStorage.
   const HISTORY_KEY = 'ltsh.history';
   const HISTORY_MAX = 100;
@@ -326,6 +346,9 @@ export function initTerminal(): void {
   }
   let hpos = cmdHistory.length; // history cursor (= length when "at the bottom")
   let busy = false; // blocks input during boot / command execution
+  // When set, the next Enter resolves an interactive `ctx.ask()` read instead of
+  // running a command (used by `boot` for the yes/no connection prompt).
+  let pendingRead: ((value: string) => void) | null = null;
 
   /* ----------------------------- output ----------------------------- */
 
@@ -479,6 +502,8 @@ export function initTerminal(): void {
         localStorage.setItem('theme', amber ? 'amber' : 'green');
       },
       su: (target?: string) => su(target),
+      // Interactive prompt: shows `question`, resolves with the user's typed line.
+      ask: (question: string) => readLine(question),
       // `exit` from an `su` shell returns to the previous user; at the top level it closes.
       exit: () => {
         if (!popIdentity()) closeWin();
@@ -584,6 +609,19 @@ export function initTerminal(): void {
   ['input', 'keyup', 'click', 'select'].forEach((ev) => input.addEventListener(ev, renderInput));
 
   input.addEventListener('keydown', async (e: KeyboardEvent) => {
+    // An interactive `ctx.ask()` read accepts input even while `busy` (boot).
+    if (pendingRead) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const value = input.value;
+        input.value = '';
+        renderInput();
+        const done = pendingRead;
+        pendingRead = null;
+        done(value);
+      }
+      return; // ignore history/completion/shortcuts while reading a line
+    }
     if (busy) {
       e.preventDefault();
       return;
@@ -669,17 +707,20 @@ export function initTerminal(): void {
     if (reconnect) reconnect.hidden = true;
     win.classList.remove('closed');
 
-    if (commands['boot']) await commands['boot'].run([]);
-
-    // Deep link: if the URL path names a command (or document), run it on load.
+    // A deep link (e.g. /whoami, reached from the sitemap or a search result)
+    // skips the SSH boot animation and runs its command straight away. The home
+    // page (no slug) plays the full connection sequence + motd.
     const slug = location.pathname.replace(/^\/+|\/+$/g, '');
-    if (slug && (commands[slug] || resolveFile(slug))) await run(slug);
+    const isDeepLink = Boolean(slug && (commands[slug] || resolveFile(slug)));
+    if (isDeepLink) await run(slug);
+    else if (commands['boot']) await commands['boot'].run([]);
 
     await sleep(reduce ? 0 : 150);
 
     // Interactive prompt. Avoid auto-focus on touch devices, where it would
     // immediately pop up the on-screen keyboard.
     inputline.hidden = false;
+    refreshPrompt(); // restore the user prompt (boot's `ask` repurposed it)
     renderInput();
     busy = false;
     if (!isTouch) input.focus();
