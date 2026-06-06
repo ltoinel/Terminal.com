@@ -24,7 +24,7 @@ man: |
   theme amber
 
   ## SEE ALSO
-  neofetch
+  motd
 js: |
   const t = ctx.args[0];
   const amber = t === 'amber' ? true : t === 'crt' || t === 'green' ? false : !document.documentElement.classList.contains('amber');

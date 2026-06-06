@@ -17,7 +17,7 @@ man: |
   date
 
   ## SEE ALSO
-  uname, neofetch
+  uname
 js: |
   ctx.line(new Date().toString());
 ---

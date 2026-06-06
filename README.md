@@ -164,7 +164,7 @@ Supported markdown: `# Title`, `## Subtitle`, `> note`, `- bullet`,
 
 - _Filesystem_: `ls`/`ll`, `cd`, `pwd`, `cat`, `tree`, `find`, `grep`,
   `mkdir`, `touch`, `rm` (FS mutations persist per-browser in `localStorage`).
-- _System / identity_: `whoami`, `neofetch`, `uname`, `date`, `echo`, `motd`,
+- _System / identity_: `whoami`, `uname`, `date`, `echo`, `motd`,
   `su`/`sudo`, `theme [crt|amber]`, `clear`/`cls`, `history`, `help`, `man`,
   `boot`, `exit`.
 - _Network_: `nslookup`, `ping`, `checkip`, `weather`, `open <name>`.

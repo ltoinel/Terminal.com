@@ -18,7 +18,7 @@ man: |
   uname
 
   ## SEE ALSO
-  neofetch, date
+  date
 js: |
   ctx.line("Lud'OS phosphor 1.0 x86_64 GNU/Terminal");
 ---

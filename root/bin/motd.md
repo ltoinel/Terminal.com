@@ -19,7 +19,7 @@ man: |
   motd
 
   ## SEE ALSO
-  boot, neofetch
+  boot
 js: |
   const E = ctx.escape;
   // `.ascii-art` forces a block-capable monospace (see global.css) so the art aligns.

@@ -44,6 +44,39 @@ const reduce =
 const sleep = (ms: number): Promise<void> =>
   reduce ? Promise.resolve() : new Promise((r) => setTimeout(r, ms));
 
+/** Shared WebAudio context for the terminal bell (created lazily on first beep). */
+let bellCtx: AudioContext | null = null;
+
+/**
+ * Rings a short terminal "bell" (à la readline): a brief square-wave beep, like
+ * a classic Linux shell when Tab completion can't uniquely complete. Created
+ * lazily inside the Tab key handler — a user gesture, so the autoplay policy
+ * allows it. A no-op when WebAudio is unavailable or blocked.
+ */
+function playBell(): void {
+  try {
+    const w = window as typeof window & { webkitAudioContext?: typeof AudioContext };
+    const AC = window.AudioContext ?? w.webkitAudioContext;
+    if (!AC) return;
+    if (!bellCtx) bellCtx = new AC();
+    if (bellCtx.state === 'suspended') void bellCtx.resume();
+    const t = bellCtx.currentTime;
+    const osc = bellCtx.createOscillator();
+    const gain = bellCtx.createGain();
+    osc.type = 'square'; // PC-speaker-ish timbre
+    osc.frequency.value = 760;
+    // Short envelope (ramps avoid the click of a hard on/off).
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.06, t + 0.005);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.11);
+    osc.connect(gain).connect(bellCtx.destination);
+    osc.start(t);
+    osc.stop(t + 0.12);
+  } catch {
+    /* audio unavailable / blocked — stay silent */
+  }
+}
+
 /** Shell data fetched by `bootTerminal` (external JSON), keyed by the legacy id. */
 const preloaded: Record<string, string | undefined> = {};
 
@@ -845,7 +878,10 @@ export function initTerminal(
     const v = input.value;
     const m = v.match(/(\S*)$/);
     const frag = m ? m[1] : '';
-    if (!frag) return;
+    if (!frag) {
+      playBell(); // nothing to complete — ring the bell
+      return;
+    }
     const head = v.slice(0, v.length - frag.length).trim();
     const first = head.split(/\s+/)[0];
     let pool: string[];
@@ -859,11 +895,17 @@ export function initTerminal(
     if (hits.length === 1) {
       input.value = v.slice(0, v.length - frag.length) + hits[0] + ' ';
     } else if (hits.length > 1) {
-      // Complete up to the longest common prefix; otherwise list the candidates.
+      // Complete up to the longest common prefix; otherwise list the candidates
+      // and ring the bell — ambiguous and can't extend, like readline.
       let common = hits[0];
       for (const h of hits) while (!h.startsWith(common)) common = common.slice(0, -1);
       if (common.length > frag.length) input.value = v.slice(0, v.length - frag.length) + common;
-      else append(`<div class="ln comment">${hits.join('  ')}</div>`);
+      else {
+        append(`<div class="ln comment">${hits.join('  ')}</div>`);
+        playBell();
+      }
+    } else {
+      playBell(); // no match — ring the bell
     }
     input.setSelectionRange(input.value.length, input.value.length);
     renderInput();

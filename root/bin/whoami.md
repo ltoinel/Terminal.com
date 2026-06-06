@@ -19,7 +19,7 @@ man: |
   whoami
 
   ## SEE ALSO
-  neofetch, open
+  open
 js: |
   // Identity comes from site.config.ts, injected into the shell cfg as `profile`.
   const p = ctx.cfg.profile;

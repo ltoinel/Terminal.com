@@ -20,7 +20,7 @@ man: |
   checkip
 
   ## SEE ALSO
-  nslookup, ping
+  httpstest, nslookup, ping
 js: |
   const E = ctx.escape;
   const row = (k, v) =>
