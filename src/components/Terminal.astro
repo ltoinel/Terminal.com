@@ -1,8 +1,9 @@
 ---
-import { commandDefs as commands, tree } from '../lib/content';
 import { site, openLinks } from '../site.config.ts';
 
-// Runtime config injected into the client shell (read back via #shell-cfg).
+// Runtime config injected into the client shell (read back via #shell-cfg). It is
+// tiny, so it stays inline; the large filesystem + command registry are fetched
+// from /shell-fs.json and /shell-commands.json (cached, shared across pages).
 const cfg = { ...site.shell, links: openLinks };
 const safe = (o: unknown) => JSON.stringify(o).replace(/</g, '\\u003c');
 ---
@@ -59,11 +60,9 @@ const safe = (o: unknown) => JSON.stringify(o).replace(/</g, '\\u003c');
   ⏻ reconnect — ssh {site.shell.host}
 </button>
 
-<script type="application/json" id="shell-fs" is:inline set:html={safe(tree)} />
-<script type="application/json" id="shell-commands" is:inline set:html={safe(commands)} />
 <script type="application/json" id="shell-cfg" is:inline set:html={safe(cfg)} />
 
 <script>
-  import { initTerminal } from '../lib/terminal';
-  initTerminal();
+  import { bootTerminal } from '../lib/terminal';
+  bootTerminal();
 </script>

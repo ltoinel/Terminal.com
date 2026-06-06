@@ -1,6 +1,29 @@
 ---
 name: ping
 desc: HTTP ping a host — e.g. ping toinel.com
+man: |
+  # PING(1)
+
+  ## NAME
+  ping — measure a host's HTTP response time
+
+  ## SYNOPSIS
+  ping [-c count] <host>
+
+  ## DESCRIPTION
+  Since the browser cannot send ICMP, ping measures the round-trip time
+  of HTTP (no-cors) requests to the host. It prints per-request detail
+  then statistics (min/avg/max, loss). Four requests by default.
+
+  ## OPTIONS
+  -c count   number of requests (1 to 20)
+
+  ## EXAMPLES
+  ping toinel.com
+  ping -c 8 geeek.org
+
+  ## SEE ALSO
+  nslookup, checkip
 js: |
   // Browsers can't send ICMP, so this is an "HTTP ping": it measures the
   // round-trip time of opaque (no-cors) fetches to the target URL.

@@ -1,6 +1,26 @@
 ---
 name: checkip
 desc: affiche votre adresse IP publique
+man: |
+  # CHECKIP(1)
+
+  ## NAME
+  checkip — show your public IP address
+
+  ## SYNOPSIS
+  checkip
+
+  ## DESCRIPTION
+  Fetches and displays your public IP address along with its
+  approximate geolocation (city, country, network operator) via an
+  online API. If that fails, a fallback service returns at least the IP
+  address.
+
+  ## EXAMPLES
+  checkip
+
+  ## SEE ALSO
+  nslookup, ping
 js: |
   const E = ctx.escape;
   const row = (k, v) =>

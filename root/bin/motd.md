@@ -1,29 +1,48 @@
 ---
 name: motd
 desc: message du jour (bannière d'accueil)
+man: |
+  # MOTD(1)
+
+  ## NAME
+  motd — message of the day (welcome banner)
+
+  ## SYNOPSIS
+  motd
+
+  ## DESCRIPTION
+  Shows the welcome banner: the Lud'OS ASCII logo, a systemd-style boot
+  sequence, the last-login date and a random quote. This is what the
+  connection plays (see boot).
+
+  ## EXAMPLES
+  motd
+
+  ## SEE ALSO
+  boot, neofetch
 js: |
   const E = ctx.escape;
   // `.ascii-art` forces a block-capable monospace (see global.css) so the art aligns.
   const art = (t) => `<div class="ln ascii-art"><span class="accent text-glow">${E(t)}</span></div>`;
   const narrow = typeof window !== 'undefined' && window.innerWidth < 680;
 
-  // Bannière « LudOs » (figlet bloody) — look glitch/CRT ; nécessite .ascii-art.
+  // Bannière « Lud'OS » (figlet bloody) — look glitch/CRT ; nécessite .ascii-art.
   const banner = [
     '  ',
     '  ',
-    ' ██▓     █    ██ ▓█████▄  ▒█████    ██████',
-    '▓██▒     ██  ▓██▒▒██▀ ██▌▒██▒  ██▒▒██    ▒',
-    '▒██░    ▓██  ▒██░░██   █▌▒██░  ██▒░ ▓██▄',
-    '▒██░    ▓▓█  ░██░░▓█▄   ▌▒██   ██░  ▒   ██▒',
-    '░██████▒▒▒█████▓ ░▒████▓ ░ ████▓▒░▒██████▒▒',
-    '░ ▒░▓  ░░▒▓▒ ▒ ▒  ▒▒▓  ▒ ░ ▒░▒░▒░ ▒ ▒▓▒ ▒ ░',
-    '░ ░ ▒  ░░░▒░ ░ ░  ░ ▒  ▒   ░ ▒ ▒░ ░ ░▒  ░ ░',
-    '  ░ ░    ░░░ ░ ░  ░ ░  ░ ░ ░ ░ ▒  ░  ░  ░',
-    '    ░  ░   ░        ░        ░ ░        ░',
+    ' ██▓     █    ██ ▓█████▄ ██▓ ▒█████    ██████',
+    '▓██▒     ██  ▓██▒▒██▀ ██▌▓█▒▒██▒  ██▒▒██    ▒',
+    '▒██░    ▓██  ▒██░░██   █▌░▓░▒██░  ██▒░ ▓██▄',
+    '▒██░    ▓▓█  ░██░░▓█▄   ▌ ▒ ▒██   ██░  ▒   ██▒',
+    '░██████▒▒▒█████▓ ░▒████▓  ░ ░ ████▓▒░▒██████▒▒',
+    '░ ▒░▓  ░░▒▓▒ ▒ ▒  ▒▒▓  ▒    ░ ▒░▒░▒░ ▒ ▒▓▒ ▒ ░',
+    '░ ░ ▒  ░░░▒░ ░ ░  ░ ▒  ▒      ░ ▒ ▒░ ░ ░▒  ░ ░',
+    '  ░ ░    ░░░ ░ ░  ░ ░  ░    ░ ░ ░ ▒  ░  ░  ░',
+    '    ░  ░   ░        ░           ░ ░        ░',
     '                  ░',
   ];
   if (narrow) {
-    ctx.append(`<div class="ln ascii-art"><span class="accent text-glow">░▒▓ Lud'Os ▓▒░</span></div>`);
+    ctx.append(`<div class="ln ascii-art"><span class="accent text-glow">░▒▓ Lud'OS ▓▒░</span></div>`);
   } else {
     for (const l of banner) {
       ctx.append(art(l));
@@ -33,10 +52,11 @@ js: |
 
   ctx.append(
     '<div class="ln">' +
-      '<span class="prompt-path">architecte fullstack</span><span class="comment"> · </span>' +
-      '<span class="prompt-path">hacker</span><span class="comment"> · </span>' +
-      '<span class="prompt-path">photographe</span><span class="comment"> · </span>' +
-      '<span class="prompt-path">pilote de drones</span></div>',
+      '<span class="prompt-path">Architecte Fullstack</span><span class="comment"> · </span>' +
+      '<span class="prompt-path">Hacker Ethique</span><span class="comment"> · </span>' +
+      '<span class="prompt-path">Photographe</span><span class="comment"> · </span>' +
+      '<span class="prompt-path">Pilote de drones</span></div>',
+      '<span class="prompt-path">Blogueur</span></div>',
   );
   ctx.line('');
 

@@ -1,6 +1,30 @@
 ---
 name: ls
 desc: list directory contents
+man: |
+  # LS(1)
+
+  ## NAME
+  ls — list directory contents
+
+  ## SYNOPSIS
+  ls [-a] [-l] [path]
+
+  ## DESCRIPTION
+  Lists the entries of the given directory (the current one by
+  default). Directories are highlighted and suffixed with a /. Hidden
+  files are omitted unless -a is given.
+
+  ## OPTIONS
+  -a   also show hidden files (starting with .)
+  -l   long format: permissions, size, date
+
+  ## EXAMPLES
+  ls
+  ls -la /etc
+
+  ## SEE ALSO
+  ll, tree, find, cd
 js: |
   const flags = ctx.args.filter((a) => a.startsWith('-')).join('');
   const all = /[aA]/.test(flags);   // -a / -A / -la …

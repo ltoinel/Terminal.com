@@ -5,3 +5,7 @@ package-lock.json
 public/
 # Fake-filesystem content (command frontmatter / js blocks are parsed verbatim).
 root/
+# PHP dependencies + lockfiles (not formatted by prettier).
+vendor/
+composer.json
+composer.lock

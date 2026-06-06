@@ -1,6 +1,26 @@
 ---
 name: nslookup
 desc: DNS lookup — e.g. nslookup toinel.com
+man: |
+  # NSLOOKUP(1)
+
+  ## NAME
+  nslookup — query the DNS
+
+  ## SYNOPSIS
+  nslookup <domain> [type]
+
+  ## DESCRIPTION
+  Resolves a domain name over DNS-over-HTTPS (Google Public DNS). The
+  record type defaults to A; the A, AAAA, NS, CNAME, MX and TXT types
+  are recognized. Each answer shows its value and TTL.
+
+  ## EXAMPLES
+  nslookup toinel.com
+  nslookup toinel.com MX
+
+  ## SEE ALSO
+  ping, checkip
 js: |
   // Real DNS is unreachable from the browser, so we resolve over DNS-over-HTTPS
   // (Google Public DNS, https://dns.google/resolve) which is CORS-enabled.

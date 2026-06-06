@@ -2,25 +2,49 @@
 import Layout from '../layouts/Layout.astro';
 import ThemeToggle from '../components/ThemeToggle.astro';
 import Terminal from '../components/Terminal.astro';
-import { routes } from '../lib/content';
+import { routes, commandDefs, manToHtml, manMetaDescription } from '../lib/content';
 import { site } from '../site.config.ts';
 
 // One static page per deep-linkable command / document. Opening the URL boots
-// the terminal, which then runs the command named in the path (see terminal.ts).
+// the terminal, which then runs `man <command>` (see terminal.ts). The terminal
+// renders client-side, so we also emit the command's manual as server-rendered,
+// crawlable HTML (visually hidden) — otherwise the page's only real content is a
+// JSON blob, invisible to engines that don't run JS.
 export function getStaticPaths() {
-  return routes.map((r) => ({
-    params: { command: r.slug },
-    props: { slug: r.slug, desc: r.desc },
-  }));
+  const manByName = new Map(commandDefs.map((c) => [c.name, c.man || '']));
+  return routes.map((r) => {
+    const man = manByName.get(r.slug) || '';
+    return {
+      params: { command: r.slug },
+      props: {
+        label: r.title,
+        desc: r.desc,
+        manHtml: man ? manToHtml(man) : '',
+        manDesc: man ? manMetaDescription(man) : '',
+      },
+    };
+  });
 }
 
 interface Props {
-  slug: string;
+  /** Command name or document heading — the route title. */
+  label: string;
+  /** Command / document description — the route desc. */
   desc: string;
+  /** Server-rendered manual HTML (empty for documents, which have no man page). */
+  manHtml: string;
+  /** Meta description taken from the man DESCRIPTION section (empty if none). */
+  manDesc: string;
 }
-const { slug, desc } = Astro.props;
-const title = `${slug} — ${site.name}`;
-const description = `${desc} · terminal interactif de ${site.shell.host}`;
+const { label, desc, manHtml, manDesc } = Astro.props;
+
+// <title> seeds from the route title. The meta description prefers the richer
+// man DESCRIPTION; otherwise the short route desc plus a context suffix (kept
+// under the snippet limit). These also feed Open Graph / Twitter via the Layout.
+const title = `${label} — ${site.name}`;
+const suffix = ` · terminal interactif de ${site.shell.host}`;
+const fallback = desc.length + suffix.length <= 160 ? `${desc}${suffix}` : desc;
+const description = manDesc || fallback;
 ---
 
 <Layout title={title} description={description}>
@@ -29,4 +53,7 @@ const description = `${desc} · terminal interactif de ${site.shell.host}`;
   </div>
 
   <Terminal />
+
+  {/* Crawlable mirror of the manual the terminal renders on load. */}
+  {manHtml && <article class="sr-only" set:html={manHtml} />}
 </Layout>

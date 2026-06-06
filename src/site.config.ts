@@ -72,24 +72,13 @@ export const site = {
   /* --------------------------- profiles & links ----------------------- */
   // Each entry can feed the `open` command, the schema.org `sameAs`, or both.
   links: [
-    {
-      url: 'https://www.geeek.org',
-      open: 'blog-geeek-org',
-      aliases: ['blog', 'geeek-org'],
-      sameAs: true,
-    },
-    { url: 'https://github.com/ltoinel', open: 'github', aliases: ['open-source'], sameAs: true },
+    { url: 'https://www.geeek.org', open: 'blog', sameAs: true},
+    { url: 'https://github.com/ltoinel', open: 'github', sameAs: true },
     { url: 'https://www.linkedin.com/in/ltoinel', open: 'linkedin', sameAs: true },
-    { url: 'https://twitter.com/ltoinel', open: 'x', sameAs: true },
     { url: 'https://www.facebook.com/ltoinel', open: 'facebook', sameAs: true },
     { url: 'https://soundcloud.com/ludovic-toinel', open: 'soundcloud', sameAs: true },
-    {
-      url: 'https://app.hackthebox.com/profile/290482',
-      open: 'hack-the-box',
-      aliases: ['htb'],
-      sameAs: true,
-    },
-    { url: 'https://x.com/ltoinel', sameAs: true },
+    { url: 'https://app.hackthebox.com/profile/290482', open: 'htb', sameAs: true},
+    { url: 'https://x.com/ltoinel', open: "x", sameAs: true },
     { url: 'https://unsplash.com/fr/@ltoinel', open: 'photographie', sameAs: true },
     { url: 'https://apollovan.fr', open: 'apollovan', sameAs: true },
     { url: 'https://www.geeek.org/fermeture-du-site-wiki-fpv/', open: 'drones-fpv' },

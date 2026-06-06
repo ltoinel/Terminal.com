@@ -53,9 +53,17 @@ export const tree: VDir = (() => {
     }
     let name = parts[parts.length - 1];
     if (name === '.keep') continue; // placeholder: only materializes its parent dir
-    // Commands live in `bin/` as `*.md`; surface them as bare binary names.
-    if (parts.length >= 2 && parts[parts.length - 2] === 'bin') name = name.replace(/\.md$/, '');
-    dir.children[name] = { type: 'file', content };
+    // Commands live in `bin/` as `*.md`; surface them as bare binary names. Their
+    // source is NOT embedded in the browsable filesystem — it already ships,
+    // parsed, in the command registry (`commandDefs`). Keeping it here too would
+    // duplicate ~50 KB of man+js per page, so `/bin` files carry only a tiny stub
+    // (enough for a friendly `cat`, while `ls`/`tree`/completion still work).
+    const isBin = parts.length >= 2 && parts[parts.length - 2] === 'bin';
+    if (isBin) name = name.replace(/\.md$/, '');
+    dir.children[name] = {
+      type: 'file',
+      content: isBin ? `${name} — commande du shell. Voir: man ${name}\n` : content,
+    };
   }
   return root;
 })();
@@ -74,13 +82,97 @@ export const commandDefs: CmdDef[] = (() => {
 /** Home documents (`~`) eligible for a landing page: the `.md` files in HOME. */
 const homeDir =
   tree.children.home?.type === 'dir' ? tree.children.home.children.ludovic : undefined;
-const homeDocs =
-  homeDir?.type === 'dir' ? Object.keys(homeDir.children).filter((n) => n.endsWith('.md')) : [];
+const homeDocs: { name: string; content: string }[] =
+  homeDir?.type === 'dir'
+    ? Object.entries(homeDir.children)
+        .filter(([n, node]) => n.endsWith('.md') && node.type === 'file')
+        .map(([name, node]) => ({ name, content: (node as VFile).content }))
+    : [];
 
-/** Commands that don't make good standalone landing pages (control / need args). */
+/** Longest meta description we emit (search engines truncate well-formed snippets near here). */
+const META_DESC_MAX = 155;
+
+/**
+ * Derive SEO meta (title + description) from a markdown document: the first ATX
+ * heading becomes the title; the text that follows, stripped of markdown and
+ * flattened to one line, becomes the description. Falls back to the slug.
+ */
+function metaFromMarkdown(md: string, slug: string): { title: string; desc: string } {
+  const lines = md.split('\n').map((l) => l.trim());
+  const heading = lines.find((l) => /^#{1,6}\s+/.test(l));
+  const title = heading ? heading.replace(/^#{1,6}\s+/, '').trim() : slug;
+  const text = lines
+    .filter((l) => l && !/^#{1,6}\s+/.test(l)) // drop blank lines and headings
+    .map((l) => l.replace(/^[-*]\s+/, '')) // de-list bullet items
+    .join(' ')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // [text](url) -> text
+    .replace(/[*_`>#]/g, '') // strip emphasis / code / quote markers
+    .replace(/\s+/g, ' ')
+    .trim();
+  const desc =
+    text.length > META_DESC_MAX ? `${text.slice(0, META_DESC_MAX - 1).trimEnd()}…` : text;
+  return { title, desc: desc || `document ${slug}` };
+}
+
+const escapeHtml = (s: string): string =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const inlineMd = (s: string): string =>
+  escapeHtml(s).replace(/`([^`]+)`/g, '<code>$1</code>');
+
+/**
+ * Render a command's `man` markdown to semantic HTML for server-side SEO: ATX
+ * headings become <h1>/<h2>, and consecutive non-blank lines are joined into a
+ * <p>. The terminal still renders the rich, interactive version on the client;
+ * this is the crawlable mirror, emitted inside a visually-hidden block.
+ */
+export function manToHtml(md: string): string {
+  let html = '';
+  let para: string[] = [];
+  const flush = () => {
+    if (para.length) {
+      html += `<p>${inlineMd(para.join(' '))}</p>`;
+      para = [];
+    }
+  };
+  for (const line of md.split('\n')) {
+    const h2 = line.match(/^##\s+(.*)$/);
+    const h1 = line.match(/^#\s+(.*)$/);
+    if (h2) {
+      flush();
+      html += `<h2>${inlineMd(h2[1])}</h2>`;
+    } else if (h1) {
+      flush();
+      html += `<h1>${inlineMd(h1[1])}</h1>`;
+    } else if (line.trim() === '') {
+      flush();
+    } else {
+      para.push(line.trim());
+    }
+  }
+  flush();
+  return html;
+}
+
+/** Extract the `## DESCRIPTION` section of a man page as a clamped meta description. */
+export function manMetaDescription(md: string): string {
+  // Capture from the DESCRIPTION heading up to the next `## ` section or the end.
+  // (No `m` flag: with it, `$` would match the first line break and truncate.)
+  const m = md.match(/##\s+DESCRIPTION\s*\n([\s\S]*?)(?=\n##\s|$)/);
+  if (!m) return '';
+  const text = m[1]
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return text.length > META_DESC_MAX ? `${text.slice(0, META_DESC_MAX - 1).trimEnd()}…` : text;
+}
+
+/**
+ * Commands that don't make good standalone landing pages (control / need args).
+ * Aliases never produce a route on their own — `routes` is derived from the
+ * command definitions, and an alias is just an extra name on an existing one.
+ */
 const NO_LINK = new Set([
   'clear',
-  'cls',
   'exit',
   'boot',
   'll',
@@ -90,6 +182,17 @@ const NO_LINK = new Set([
   'su',
   'history',
   'theme',
+  // Argument-required utilities: a standalone page would only show "usage: …".
+  'base64',
+  'sha256sum',
+  'man',
+  'find',
+  'grep',
+  'touch',
+  'mkdir',
+  'rm',
+  // Side effect (sends an SMS) + needs an argument — never a landing page.
+  'msg',
 ]);
 
 export interface Route {
@@ -106,8 +209,8 @@ export const routes: Route[] = [
   ...commandDefs
     .filter((c) => !NO_LINK.has(c.name))
     .map((c) => ({ slug: c.name, title: c.name, desc: c.desc || `commande ${c.name}` })),
-  ...homeDocs.map((f) => {
-    const slug = f.replace(/\.md$/, '');
-    return { slug, title: slug, desc: `document ${f}` };
+  ...homeDocs.map(({ name, content }) => {
+    const slug = name.replace(/\.md$/, '');
+    return { slug, ...metaFromMarkdown(content, slug) };
   }),
 ];

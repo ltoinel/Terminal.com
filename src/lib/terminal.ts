@@ -35,15 +35,44 @@ const reduce =
 const sleep = (ms: number): Promise<void> =>
   reduce ? Promise.resolve() : new Promise((r) => setTimeout(r, ms));
 
-/** Reads and parses a `<script type="application/json" id="...">` block. */
+/** Shell data fetched by `bootTerminal` (external JSON), keyed by the legacy id. */
+const preloaded: Record<string, string | undefined> = {};
+
+/**
+ * Reads and parses shell data by id: a value preloaded from an external JSON
+ * file (the large `shell-fs` / `shell-commands`), or, failing that, an inline
+ * `<script type="application/json" id="...">` block (the tiny `shell-cfg`).
+ */
 function readJSON<T>(id: string, fallback: T): T {
-  const elJson = document.getElementById(id);
-  if (!elJson || !elJson.textContent) return fallback;
+  const text = preloaded[id] ?? document.getElementById(id)?.textContent ?? null;
+  if (!text) return fallback;
   try {
-    return JSON.parse(elJson.textContent) as T;
+    return JSON.parse(text) as T;
   } catch {
     return fallback;
   }
+}
+
+/**
+ * Page entry point: fetch the externalised shell data (filesystem + command
+ * registry) — a single cached request shared across navigations — then start the
+ * terminal. The tiny `#shell-cfg` stays inlined, so the prompt can render even if
+ * a fetch is slow or fails (offline: the terminal boots with an empty fs).
+ */
+export async function bootTerminal(): Promise<void> {
+  const load = async (url: string, id: string): Promise<void> => {
+    try {
+      const res = await fetch(url);
+      if (res.ok) preloaded[id] = await res.text();
+    } catch {
+      /* offline / blocked — readJSON falls back to its empty default */
+    }
+  };
+  await Promise.all([
+    load('/shell-fs.json', 'shell-fs'),
+    load('/shell-commands.json', 'shell-commands'),
+  ]);
+  initTerminal();
 }
 
 /** Escapes the HTML-sensitive characters before injecting into the DOM. */
@@ -295,6 +324,131 @@ export function initTerminal(): void {
     return null;
   }
 
+  /* ----------------------- filesystem mutations --------------------- */
+  // `touch` / `mkdir` / `rm` mutate the in-memory tree. Changes are persisted as
+  // a journal of operations in localStorage and replayed onto the freshly-loaded
+  // base tree at each boot — so a deploy still refreshes /bin, documents, etc.,
+  // *under* the user's local changes (rather than freezing a whole stale tree).
+  const FS_KEY = 'ltsh.fs';
+  interface FsOp {
+    op: 'mkdir' | 'touch' | 'rm';
+    path: string; // absolute & normalized, so replay is independent of cwd
+    p?: boolean; // mkdir -p
+    r?: boolean; // rm -r
+  }
+  type MutRes = { error?: string; changed?: boolean };
+
+  const splitPath = (abs: string): { parent: string; base: string } => ({
+    parent: abs.slice(0, abs.lastIndexOf('/')) || '/',
+    base: abs.split('/').pop() || '',
+  });
+
+  /** Creates a directory (with `-p`, creating intermediate dirs as needed). */
+  function vfsMkdir(abs: string, disp: string, parents: boolean): MutRes {
+    const parts = segs(abs);
+    if (!parts.length) return { error: `cannot create directory '${disp}': File exists` };
+    let dir: VNode = root;
+    let changed = false;
+    for (let i = 0; i < parts.length; i++) {
+      if (dir.type !== 'dir') return { error: `cannot create directory '${disp}': Not a directory` };
+      const seg = parts[i];
+      const last = i === parts.length - 1;
+      const child: VNode | undefined = dir.children[seg];
+      if (child) {
+        if (last && !parents) return { error: `cannot create directory '${disp}': File exists` };
+        if (child.type !== 'dir')
+          return { error: `cannot create directory '${disp}': Not a directory` };
+        dir = child;
+      } else {
+        if (!last && !parents)
+          return { error: `cannot create directory '${disp}': No such file or directory` };
+        const made: VDir = { type: 'dir', children: {} };
+        dir.children[seg] = made;
+        dir = made;
+        changed = true;
+      }
+    }
+    return { changed };
+  }
+
+  /** Creates an empty file; a no-op if the path already exists (like real touch). */
+  function vfsTouch(abs: string, disp: string): MutRes {
+    if (nodeAt(abs)) return { changed: false };
+    const { parent, base } = splitPath(abs);
+    const p = nodeAt(parent);
+    if (!p || p.type !== 'dir') return { error: `cannot touch '${disp}': No such file or directory` };
+    p.children[base] = { type: 'file', content: '' };
+    return { changed: true };
+  }
+
+  /** Removes a file, or a directory with `-r`. `-f` ignores a missing target. */
+  function vfsRm(abs: string, disp: string, recursive: boolean, force: boolean): MutRes {
+    const node = nodeAt(abs);
+    if (!node)
+      return force ? { changed: false } : { error: `cannot remove '${disp}': No such file or directory` };
+    if (abs === '/' || cwd === abs || cwd.startsWith(`${abs}/`))
+      return { error: `cannot remove '${disp}': directory in use` };
+    if (node.type === 'dir' && !recursive) return { error: `cannot remove '${disp}': Is a directory` };
+    const { parent, base } = splitPath(abs);
+    const p = nodeAt(parent);
+    if (p?.type !== 'dir') return { error: `cannot remove '${disp}': No such file or directory` };
+    delete p.children[base];
+    return { changed: true };
+  }
+
+  let fsJournal: FsOp[] = [];
+  const saveJournal = (): void => {
+    try {
+      localStorage.setItem(FS_KEY, JSON.stringify(fsJournal));
+    } catch {
+      /* storage full / unavailable — the change still applies this session */
+    }
+  };
+
+  /** Runs a mutation, records it in the journal on success, returns an error or null. */
+  function fsMutate(
+    op: FsOp['op'],
+    rawPath: string,
+    flags: { p?: boolean; r?: boolean; f?: boolean },
+  ): string | null {
+    if (!rawPath) return 'missing operand';
+    const abs = resolvePath(rawPath);
+    if (denied(abs)) return `${rawPath}: Permission denied`;
+    const res =
+      op === 'mkdir'
+        ? vfsMkdir(abs, rawPath, !!flags.p)
+        : op === 'touch'
+          ? vfsTouch(abs, rawPath)
+          : vfsRm(abs, rawPath, !!flags.r, !!flags.f);
+    if (res.error) return res.error;
+    if (res.changed) {
+      const entry: FsOp = { op, path: abs };
+      if (flags.p) entry.p = true;
+      if (flags.r) entry.r = true;
+      fsJournal.push(entry);
+      saveJournal();
+    }
+    return null;
+  }
+
+  // Replay the persisted journal onto the base tree (rm is forced & idempotent).
+  try {
+    const stored: unknown = JSON.parse(localStorage.getItem(FS_KEY) || '[]');
+    if (Array.isArray(stored)) {
+      fsJournal = stored.filter(
+        (o): o is FsOp =>
+          !!o && ['mkdir', 'touch', 'rm'].includes(o.op) && typeof o.path === 'string',
+      );
+      for (const o of fsJournal) {
+        if (o.op === 'mkdir') vfsMkdir(o.path, o.path, !!o.p);
+        else if (o.op === 'touch') vfsTouch(o.path, o.path);
+        else vfsRm(o.path, o.path, !!o.r, true);
+      }
+    }
+  } catch {
+    /* corrupt journal — start from the clean base tree */
+  }
+
   /* ----------------------------- prompt ----------------------------- */
 
   /** Colored HTML prompt for the current user & directory (echo + input line). */
@@ -455,6 +609,10 @@ export function initTerminal(): void {
   interface CmdDef {
     name: string;
     desc?: string;
+    /** Alternate names that resolve to this same command (e.g. `cls` → `clear`). */
+    alias?: string[];
+    /** Authored manual page (markdown), shown by `man <name>`. */
+    man?: string;
     js?: string;
     body: string;
   }
@@ -475,7 +633,12 @@ export function initTerminal(): void {
       body,
       cfg,
       history: cmdHistory,
-      commands: cmdDefs.map((d) => ({ name: d.name, desc: d.desc || '' })),
+      commands: cmdDefs.map((d) => ({
+        name: d.name,
+        desc: d.desc || '',
+        alias: d.alias || [],
+        man: d.man || '',
+      })),
       escape: escapeHtml,
       fileList,
       resolveFile,
@@ -485,6 +648,12 @@ export function initTerminal(): void {
       cd: (arg?: string) => chdir(arg),
       list: (arg?: string) => listPath(arg),
       read: (arg: string) => readPath(arg),
+      // Mutations (persisted to localStorage): `mkdir` / `touch` / `rm`. Each
+      // returns an error string, or null on success.
+      mkdir: (path: string, parents = false) => fsMutate('mkdir', path, { p: parents }),
+      touch: (path: string) => fsMutate('touch', path, {}),
+      rm: (path: string, recursive = false, force = false) =>
+        fsMutate('rm', path, { r: recursive, f: force }),
       print: (md: string) => printBlock(md),
       raw: (text: string) => printRaw(text),
       line: (text: string) => printLine(text),
@@ -520,7 +689,7 @@ export function initTerminal(): void {
   for (const def of cmdDefs) {
     if (!def.name) continue;
     const { name, desc = '', js, body } = def;
-    commands[name] = {
+    const cmd: Cmd = {
       desc,
       run: js
         ? async (args) => {
@@ -532,6 +701,9 @@ export function initTerminal(): void {
           }
         : () => printBlock(body),
     };
+    commands[name] = cmd;
+    // Aliases resolve to the very same command object (e.g. `cls` → `clear`).
+    for (const a of def.alias ?? []) commands[a] = cmd;
   }
 
   /* --------------------------- execution ---------------------------- */
@@ -708,11 +880,15 @@ export function initTerminal(): void {
     win.classList.remove('closed');
 
     // A deep link (e.g. /whoami, reached from the sitemap or a search result)
-    // skips the SSH boot animation and runs its command straight away. The home
-    // page (no slug) plays the full connection sequence + motd.
+    // skips the SSH boot animation. A command page opens its manual (`man
+    // <command>`) instead of executing the command, so the visitor sees what it
+    // does before running it; a document deep link still renders the file
+    // directly. The home page (no slug) plays the full connection sequence + motd.
     const slug = location.pathname.replace(/^\/+|\/+$/g, '');
-    const isDeepLink = Boolean(slug && (commands[slug] || resolveFile(slug)));
-    if (isDeepLink) await run(slug);
+    const isCommand = Boolean(slug && commands[slug]);
+    const isDeepLink = isCommand || Boolean(slug && resolveFile(slug));
+    if (isCommand) await run(`man ${slug}`);
+    else if (isDeepLink) await run(slug);
     else if (commands['boot']) await commands['boot'].run([]);
 
     await sleep(reduce ? 0 : 150);

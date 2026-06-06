@@ -2,6 +2,7 @@
 import MatrixRain from '../components/MatrixRain.astro';
 import JsonLd from '../components/JsonLd.astro';
 import { site } from '../site.config.ts';
+import { routes } from '../lib/content';
 import '../styles/global.css';
 
 interface Props {
@@ -26,6 +27,7 @@ const ogImage = new URL(site.ogImage, site.url).href;
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.json" />
     <link rel="canonical" href={canonical} />
 
     <title>{title}</title>
@@ -99,5 +101,28 @@ const ogImage = new URL(site.ogImage, site.url).href;
     <div class="fx-overlay fx-flicker" aria-hidden="true"></div>
 
     <slot />
+
+    <!-- Internal-link mesh, derived from the SAME `routes` array that feeds the
+         sitemap. The terminal is keyboard-driven (no clickable links), so without
+         this every command/document page would be an orphan for crawlers and
+         screen readers. Visually hidden (.sr-only); fully indexable & accessible. -->
+    <nav class="sr-only" aria-label="Plan du site">
+      <a href="/">accueil</a>
+      {
+        routes.map((r) => (
+          <a href={`/${r.slug}/`} title={r.desc}>
+            {r.title}
+          </a>
+        ))
+      }
+    </nav>
+
+    <!-- Register the service worker: caches the shell data (shared across
+         navigations) and enables Web Push. Best-effort, after load. -->
+    <script is:inline>
+      if ('serviceWorker' in navigator) {
+        addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+      }
+    </script>
   </body>
 </html>
