@@ -54,6 +54,12 @@ let bellCtx: AudioContext | null = null;
  * allows it. A no-op when WebAudio is unavailable or blocked.
  */
 function playBell(): void {
+  // Muted by the `bell off` command (persisted); default is on.
+  try {
+    if (localStorage.getItem('ltsh.bell') === 'off') return;
+  } catch {
+    /* localStorage blocked — fall through and beep */
+  }
   try {
     const w = window as typeof window & { webkitAudioContext?: typeof AudioContext };
     const AC = window.AudioContext ?? w.webkitAudioContext;
@@ -625,6 +631,9 @@ export function initTerminal(
   }
   let hpos = cmdHistory.length; // history cursor (= length when "at the bottom")
   let busy = false; // blocks input during boot / command execution
+  // Aborts the running command when the user presses Ctrl+C. Commands opt in by
+  // honoring `ctx.signal` (passing it to fetch, checking it in loops, …).
+  let currentAbort: AbortController | null = null;
   // When set, the next Enter resolves an interactive `ctx.ask()` read instead of
   // running a command (used by `boot` for the yes/no connection prompt).
   let pendingRead: ((value: string) => void) | null = null;
@@ -803,6 +812,8 @@ export function initTerminal(
         if (!popIdentity()) closeWin();
       },
       exec: (name: string, a: string[] = []) => commands[name]?.run(a),
+      // Aborts when the user presses Ctrl+C during a long command (fetch, loops).
+      signal: currentAbort ? currentAbort.signal : undefined,
     };
   }
 
@@ -855,14 +866,21 @@ export function initTerminal(
     const name = parts[0];
     const args = parts.slice(1);
     const cmd = commands[name];
-    if (cmd) {
-      await cmd.run(args);
-    } else {
-      // Not a command: try the path as a file (implicit `cat`) in the current dir.
-      const res = readPath(name);
-      if (res.error) printErr(`${name}: command not found — type \`help\``);
-      else if ((res.name || '').endsWith('.md')) printBlock(res.content as string);
-      else printRaw(res.content as string);
+    // Fresh abort handle per command, exposed to its `js` via `ctx.signal` and
+    // triggered by Ctrl+C (see the keydown handler).
+    currentAbort = new AbortController();
+    try {
+      if (cmd) {
+        await cmd.run(args);
+      } else {
+        // Not a command: try the path as a file (implicit `cat`) in the current dir.
+        const res = readPath(name);
+        if (res.error) printErr(`${name}: command not found — type \`help\``);
+        else if ((res.name || '').endsWith('.md')) printBlock(res.content as string);
+        else printRaw(res.content as string);
+      }
+    } finally {
+      currentAbort = null;
     }
   }
 
@@ -929,6 +947,13 @@ export function initTerminal(
       return; // ignore history/completion/shortcuts while reading a line
     }
     if (busy) {
+      // Ctrl+C interrupts the running command — it aborts `ctx.signal`, which
+      // commands honor (fetch, loops, hashcat workers). Sync code can't be
+      // pre-empted, so a command that ignores the signal simply runs on.
+      if (e.ctrlKey && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'c') {
+        append('<div class="ln out">^C</div>');
+        currentAbort?.abort();
+      }
       e.preventDefault();
       return;
     }

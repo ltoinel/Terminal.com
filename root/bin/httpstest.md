@@ -56,6 +56,7 @@ js: |
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 8000);
+    if (ctx.signal) ctx.signal.addEventListener('abort', () => ctrl.abort()); // Ctrl+C
     const t0 = performance.now();
     await fetch(`https://${host}/`, { mode: 'no-cors', cache: 'no-store', redirect: 'follow', signal: ctrl.signal });
     clearTimeout(timer);
@@ -72,6 +73,7 @@ js: |
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 25000);
+    if (ctx.signal) ctx.signal.addEventListener('abort', () => ctrl.abort()); // Ctrl+C
     const res = await fetch(
       `https://observatory-api.mdn.mozilla.net/api/v2/scan?host=${encodeURIComponent(host)}`,
       { method: 'POST', cache: 'no-store', signal: ctrl.signal },

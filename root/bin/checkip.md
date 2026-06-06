@@ -30,7 +30,7 @@ js: |
   ctx.line('Resolving your public IP…');
   try {
     // ipapi.co: IP + geolocation, CORS-enabled.
-    const r = await fetch('https://ipapi.co/json/', { cache: 'no-store' });
+    const r = await fetch('https://ipapi.co/json/', { cache: 'no-store', signal: ctx.signal });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const d = await r.json();
     if (d.error) throw new Error(d.reason || 'API error');
@@ -42,7 +42,7 @@ js: |
   } catch {
     // Fallback: ipify, very reliable, returns only the IP.
     try {
-      const r = await fetch('https://api64.ipify.org?format=json', { cache: 'no-store' });
+      const r = await fetch('https://api64.ipify.org?format=json', { cache: 'no-store', signal: ctx.signal });
       const d = await r.json();
       row('IP', d.ip);
     } catch {

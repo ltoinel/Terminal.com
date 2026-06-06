@@ -95,6 +95,7 @@ js: |
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 12000);
+    if (ctx.signal) ctx.signal.addEventListener('abort', () => ctrl.abort()); // Ctrl+C
     const res = await fetch('/api/push.php?action=send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },

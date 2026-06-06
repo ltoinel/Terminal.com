@@ -34,7 +34,7 @@ js: |
   ctx.line('Server:  dns.google (DNS-over-HTTPS)');
   ctx.line('');
   try {
-    const res = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(name)}&type=${encodeURIComponent(type)}`, { cache: 'no-store' });
+    const res = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(name)}&type=${encodeURIComponent(type)}`, { cache: 'no-store', signal: ctx.signal });
     const data = await res.json();
     if (data.Status !== 0 || !data.Answer || !data.Answer.length) {
       ctx.error(`** server can't find ${name}: ${data.Status === 3 ? 'NXDOMAIN' : 'no ' + type + ' record'}`);

@@ -44,13 +44,15 @@ js: |
   ctx.line(`PING ${ctx.escape(host)} (HTTP) — ${count} requests`);
   const times = [];
   for (let seq = 1; seq <= count; seq++) {
+    if (ctx.signal && ctx.signal.aborted) break; // Ctrl+C
     const t0 = performance.now();
     try {
-      await fetch(url, { mode: 'no-cors', cache: 'no-store', redirect: 'follow' });
+      await fetch(url, { mode: 'no-cors', cache: 'no-store', redirect: 'follow', signal: ctx.signal });
       const dt = performance.now() - t0;
       times.push(dt);
       ctx.line(`response from ${ctx.escape(host)}: seq=${seq} time=${dt.toFixed(1)} ms`);
     } catch (e) {
+      if (ctx.signal && ctx.signal.aborted) break; // aborted mid-flight — stop quietly
       ctx.error(`request to ${host}: seq=${seq} failed (${e.name || 'error'})`);
     }
     if (seq < count) await ctx.sleep(500);

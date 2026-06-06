@@ -331,12 +331,20 @@ js: |
         return 'exhausted';
       })();
 
-  const outcome = await Promise.race([runner, timeout]);
+  // Ctrl+C (ctx.signal) cancels the run too.
+  const aborted = new Promise((res) => {
+    if (!ctx.signal) return;
+    if (ctx.signal.aborted) res('aborted');
+    else ctx.signal.addEventListener('abort', () => res('aborted'), { once: true });
+  });
+  const outcome = await Promise.race([runner, timeout, aborted]);
 
-  // Stop every worker and tear them down (covers the timeout / found paths too).
+  // Stop every worker and tear them down (covers the timeout / abort / found paths).
   workers.forEach((w) => w.postMessage({ type: 'stop' }));
   clearInterval(ticker);
-  refreshStatus(found ? 'Cracked' : bench ? 'Done' : outcome === 'timeout' ? 'Aborted' : 'Exhausted');
+  refreshStatus(
+    found ? 'Cracked' : bench ? 'Done' : outcome === 'aborted' ? 'Aborted' : outcome === 'timeout' ? 'Aborted' : 'Exhausted',
+  );
   cleanup();
 
   // ---- final report ----
@@ -349,6 +357,8 @@ js: |
   } else if (bench) {
     ctx.line(`Speed.#*.........: ${fmtSpeed(secs > 0 ? totalTried / secs : 0)} (avg) · ${fmtSpeed(peakHps)} (peak), across ${cores} cores`);
     ctx.line('Status...........: Benchmark done');
+  } else if (outcome === 'aborted') {
+    ctx.line('Status...........: Aborted (Ctrl+C)');
   } else if (outcome === 'timeout') {
     ctx.line('Status...........: Aborted (timeout) — raise --timeout or shrink the keyspace');
   } else {
