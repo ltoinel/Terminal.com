@@ -26,4 +26,6 @@ js: |
   ctx.append(`<div class="ssh-out"><div class="ln"><span class="prompt-path"># commands</span></div>${rows}</div>`);
   ctx.line('');
   ctx.append(`<div class="ln comment"># files (try <span class="cmd">cat &lt;file&gt;</span> or just the name):</div><div class="ln">${ctx.fileList().map((f) => `<span class="prompt-path">${f}</span>`).join('  ')}</div>`);
+  ctx.line('');
+  ctx.append('<div class="ln comment"># run <span class="cmd">man &lt;command&gt;</span> for more on a command</div>');
 ---

@@ -2,7 +2,8 @@
 
 Personal portal — **[Astro](https://astro.build) + [Tailwind CSS](https://tailwindcss.com) v4**.
 Static site, **terminal / phosphor aesthetic**, zero framework JS, with built-in SEO
-and schema.org structured data. Deployed at **ludovic.toinel.com**.
+and schema.org structured data. Config-driven and reusable: every site-specific
+value (host, identity, links) lives in **`src/site.config.ts`**.
 
 **Design**: a single terminal window. Two themes: **CRT green** (with a "Matrix"
 digital-rain background) and **amber monochrome**. Top-right controls: open a new
@@ -64,7 +65,7 @@ public_html/
 │   └── styles/global.css     ← Tailwind + terminal theme (CSS variables, CRT effects)
 ├── root/                     ← ⭐ THE FAKE FILESYSTEM (a real on-disk directory tree)
 │   ├── bin/                  ← one command = one markdown (frontmatter name/desc/js)
-│   ├── home/ludovic/         ← visitor's ~ : docs browsed via ls/cat (about/projects/contact)
+│   ├── home/guest/           ← visitor's ~ : docs browsed via ls/cat (about/projects/contact)
 │   ├── etc/, var/, usr/, …   ← explorable "decor" directories
 ├── public/                   ← served as-is
 │   ├── api/push.php          ← Web Push backend (?action=send|subscribe)
@@ -94,8 +95,9 @@ The top-right buttons use [astro-icon](https://www.astroicon.dev/) with the
 ## Reusing this portal
 
 1. Edit **`src/site.config.ts`** (identity, URL, profiles, shell host/user).
-2. Replace the contents of **`root/home/ludovic/`** (your `.md` documents) and,
-   if needed, the "decor" files under `root/etc`, `root/var`, etc.
+2. Replace the contents of **`root/home/<user>/`** (your `.md` documents; `<user>`
+   is `shell.user`, e.g. `guest`) and, if needed, the "decor" files under
+   `root/etc`, `root/var`, etc.
 3. Add/remove commands in **`root/bin/`** (see below).
 4. Replace the icons (`public/icons/*`, `public/favicon.ico`, `public/apple-touch-icon.png`)
    and the OG image (`public/ludovic-toinel.jpg`).
@@ -106,19 +108,20 @@ The top-right buttons use [astro-icon](https://www.astroicon.dev/) with the
 
 ## Interactive shell
 
-On load, the portal simulates an **SSH connection** to `ludovic.toinel.com`
-and prints the message of the day (`motd`), then hands over control. The visitor
-then types commands to explore the content.
+On load, the portal simulates an **SSH connection** to the configured host
+(`shell.host` in `src/site.config.ts`) and prints the message of the day
+(`motd`), then hands over control. The visitor then types commands to explore
+the content.
 The window is **draggable** (grab the title bar), **resizable** (handle at the
 bottom right) and has close / minimize / maximize buttons (double-click the bar
 to maximize).
 
 **The content lives in the `root/` tree (= the fake filesystem):**
 
-- **`root/home/ludovic/`** = the visitor's `~` directory: documents browsed
-  with `ls` / `cat` (`about.md`, `projects.md`, `contact.md`).
-  To **add a document**, create `root/home/ludovic/my-file.md`: it becomes
-  reachable via `cat my-file.md` (or just `my-file`) and shows up in `ls`.
+- **`root/home/<user>/`** (the `shell.user`, e.g. `guest`) = the visitor's `~`
+  directory: documents browsed with `ls` / `cat` (`about.md`, `projects.md`,
+  `contact.md`). To **add a document**, create `root/home/<user>/my-file.md`: it
+  becomes reachable via `cat my-file.md` (or just `my-file`) and shows up in `ls`.
 
 - **`root/bin/`** = **one command = one markdown**; the build (`content.ts`)
   discovers commands automatically by listing this directory (they also appear
