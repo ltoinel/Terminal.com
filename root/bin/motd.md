@@ -1,6 +1,6 @@
 ---
 name: motd
-desc: message du jour (bannière d'accueil)
+desc: message of the day (welcome banner)
 man: |
   # MOTD(1)
 
@@ -26,7 +26,7 @@ js: |
   const art = (t) => `<div class="ln ascii-art"><span class="accent text-glow">${E(t)}</span></div>`;
   const narrow = typeof window !== 'undefined' && window.innerWidth < 680;
 
-  // Bannière « Lud'OS » (figlet bloody) — look glitch/CRT ; nécessite .ascii-art.
+  // "Lud'OS" banner (figlet bloody) — glitch/CRT look; requires .ascii-art.
   const banner = [
     '  ',
     '  ',
@@ -50,27 +50,19 @@ js: |
     }
   }
 
-  ctx.append(
-    '<div class="ln">' +
-      '<span class="prompt-path">Architecte Fullstack</span><span class="comment"> · </span>' +
-      '<span class="prompt-path">Hacker Ethique</span><span class="comment"> · </span>' +
-      '<span class="prompt-path">Photographe</span><span class="comment"> · </span>' +
-      '<span class="prompt-path">Pilote de drones</span></div>',
-      '<span class="prompt-path">Blogueur</span></div>',
-  );
   ctx.line('');
 
-  // Séquence de boot façon systemd.
+  // systemd-style boot sequence.
   const ok = (msg) =>
     ctx.append(
       `<div class="ln"><span class="comment">[</span><span class="accent text-glow"> OK </span><span class="comment">] ${E(msg)}</span></div>`,
     );
   const steps = [
-    'noyau phosphor 1.0 chargé',
-    `${ctx.commands.length} commandes montées sur /bin`,
-    'liaison SSH chiffrée (ED25519) établie',
-    'thème CRT calibré · glow nominal',
-    'café : infusion en cours ☕',
+    'Phosphor 1.0 kernel loaded',
+    `${ctx.commands.length} commands mounted on /bin`,
+    'Encrypted SSH link (ED25519) established',
+    'CRT theme calibrated · glow nominal',
+    'Coffee: brewing ☕',
   ];
   for (const s of steps) {
     ok(s);
@@ -78,27 +70,27 @@ js: |
   }
   ctx.line('');
 
-  // Dernière connexion : persistée en localStorage → on affiche la session
-  // PRÉCÉDENTE (comme un vrai « last login »), puis on enregistre la session courante.
+  // Last login: persisted in localStorage → we show the PREVIOUS session (like a
+  // real `last login`), then record the current one.
   const LL_KEY = 'ltsh.lastlogin';
   let prev = null;
   try {
     prev = JSON.parse(localStorage.getItem(LL_KEY) || 'null');
   } catch {
-    /* localStorage indisponible / valeur corrompue */
+    /* localStorage unavailable / corrupt value */
   }
   if (prev && prev.date) {
-    const when = new Date(prev.date).toLocaleString('fr-FR', {
+    const when = new Date(prev.date).toLocaleString('en-GB', {
       dateStyle: 'medium',
       timeStyle: 'short',
     });
-    const from = prev.ip ? ` depuis ${E(prev.ip)}` : '';
-    ctx.append(`<div class="ln comment">Dernière connexion : ${E(when)}${from}</div>`);
+    const from = prev.ip ? ` from ${E(prev.ip)}` : '';
+    ctx.append(`<div class="ln comment">Last login: ${E(when)}${from}</div>`);
   } else {
-    ctx.append('<div class="ln comment">Première connexion — bienvenue. 👋</div>');
+    ctx.append('<div class="ln comment">First connection — welcome. 👋</div>');
   }
-  // Enregistre la session courante. La date est posée tout de suite ; l'IP réelle
-  // est récupérée en arrière-plan (fire-and-forget) et patchée pour la prochaine fois.
+  // Record the current session. The date is set right away; the real IP is fetched
+  // in the background (fire-and-forget) and patched in for next time.
   try {
     localStorage.setItem(LL_KEY, JSON.stringify({ date: Date.now(), ip: null }));
     fetch('https://api64.ipify.org?format=json', { cache: 'no-store' })
@@ -111,26 +103,26 @@ js: |
         }
       })
       .catch(() => {
-        /* hors-ligne / bloqué : on garde la date sans IP */
+        /* offline / blocked: keep the date without an IP */
       });
   } catch {
-    /* localStorage indisponible */
+    /* localStorage unavailable */
   }
 
-  // Fortune aléatoire (les backticks deviennent du code via le rendu inline).
+  // Random fortune (backticks become code via the inline renderer).
   const fortunes = [
     "There's no place like `127.0.0.1`.",
-    'En cas de doute : `man`, puis café.',
+    'When in doubt: `man`, then coffee.',
     '99 little bugs in the code… `127` little bugs in the code.',
-    "Le meilleur code est celui qu'on n'a pas à écrire.",
+    "The best code is the code you don't have to write.",
     '`sudo` make me a sandwich.',
-    'Le drone est prêt. Le ciel aussi.',
-    'Il y a 10 types de gens : ceux qui lisent le binaire et les autres.',
+    'The drone is ready. So is the sky.',
+    "There are 10 kinds of people: those who read binary and those who don't.",
   ];
   ctx.line('');
   ctx.line('☞ ' + fortunes[Math.floor(Math.random() * fortunes.length)]);
   ctx.line('');
 
-  // Démarrage rapide.
-  ctx.line('→ `help` liste tout · `whoami` qui suis-je · `ls` explore · `su` ⚡');
+  // Quick start.
+  ctx.line('→ `help` lists everything · `whoami` who am I · `ls` explore');
 ---

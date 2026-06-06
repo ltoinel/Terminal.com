@@ -1,0 +1,27 @@
+---
+import { Icon } from 'astro-icon/components';
+---
+
+<button
+  id="fullscreen-toggle"
+  type="button"
+  aria-label="Basculer le plein écran"
+  class="chip needs-js font-mono text-sm"
+>
+  <Icon name="lucide:maximize" class="h-4 w-4 [html.fs_&]:hidden" />
+  <Icon name="lucide:minimize" class="hidden h-4 w-4 [html.fs_&]:inline" />
+  <span class="[html.fs_&]:hidden">full</span>
+  <span class="hidden [html.fs_&]:inline">exit</span>
+</button>
+
+<script>
+  const btn = document.getElementById('fullscreen-toggle');
+  btn?.addEventListener('click', () => {
+    if (document.fullscreenElement) document.exitFullscreen?.();
+    else document.documentElement.requestFullscreen?.().catch(() => {});
+  });
+  // Keep the icon/label in sync however fullscreen ends (Esc, F11, OS gesture).
+  document.addEventListener('fullscreenchange', () => {
+    document.documentElement.classList.toggle('fs', !!document.fullscreenElement);
+  });
+</script>

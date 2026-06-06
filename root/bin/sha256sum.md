@@ -19,7 +19,7 @@ man: |
   sha256sum hello
 
   ## SEE ALSO
-  base64
+  md5, base64
 js: |
   const input = ctx.args.join(' ');
   if (!input) { ctx.error('usage: sha256sum <text>'); return; }

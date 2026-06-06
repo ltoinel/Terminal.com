@@ -1,0 +1,18 @@
+---
+import { Icon } from 'astro-icon/components';
+---
+
+<button
+  id="new-shell"
+  type="button"
+  aria-label="Ouvrir une nouvelle fenêtre shell"
+  class="chip needs-js font-mono text-sm"
+>
+  <Icon name="lucide:plus" class="h-4 w-4" />
+  <span>shell</span>
+</button>
+
+<script>
+  import { spawnTerminal } from '../lib/terminal';
+  document.getElementById('new-shell')?.addEventListener('click', () => spawnTerminal());
+</script>

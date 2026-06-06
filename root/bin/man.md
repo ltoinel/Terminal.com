@@ -51,5 +51,20 @@ js: |
     '',
     footer,
   ].join('\n');
-  ctx.print(page);
+  // Turn each command name in the "SEE ALSO" section into a link that opens its
+  // manual (`[name](command:name)`); only names that resolve to a real command
+  // or alias are linked, the rest is left untouched.
+  const known = (n) => ctx.commands.some((c) => c.name === n || (c.alias || []).includes(n));
+  let inSeeAlso = false;
+  const linked = page
+    .split('\n')
+    .map((line) => {
+      if (line.startsWith('## ')) { inSeeAlso = line.slice(3).trim() === 'SEE ALSO'; return line; }
+      if (!line.trim()) { inSeeAlso = false; return line; } // a blank line ends the section
+      if (inSeeAlso)
+        return line.replace(/[\w-]+/g, (tok) => (known(tok) ? `[${tok}](command:${tok})` : tok));
+      return line;
+    })
+    .join('\n');
+  ctx.print(linked);
 ---

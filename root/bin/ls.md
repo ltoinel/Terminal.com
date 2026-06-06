@@ -40,7 +40,7 @@ js: |
     : `<span class="prompt-path">${ctx.escape(e.name)}</span>`;
   if (long) {
     const d = new Date();
-    const stamp = `${d.toLocaleString('fr-FR', { month: 'short' })} ${String(d.getDate()).padStart(2, ' ')}`;
+    const stamp = `${d.toLocaleString('en-US', { month: 'short' })} ${String(d.getDate()).padStart(2, ' ')}`;
     ctx.append(
       `<div class="ln comment">total ${entries.length}</div>` +
         entries

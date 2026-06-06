@@ -64,9 +64,9 @@ export const site = {
     /** Host shown in the prompt and SSH animation. */
     host: 'ludovic.toinel.com',
     /** User shown in the prompt. */
-    user: 'ludovic@toinel.com',
+    user: 'guest',
     /** Absolute home directory — must match the `root/home/...` tree. */
-    home: '/home/ludovic',
+    home: '/home/guest',
   },
 
   /* --------------------------- profiles & links ----------------------- */

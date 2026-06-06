@@ -19,12 +19,21 @@
 interface Cfg {
   /** Host shown in prompts and the SSH animation. */
   host: string;
-  /** User shown in the prompt (e.g. `ludovic@toinel.com`). */
+  /** User name shown in the prompt as `user@host` (e.g. `guest`). */
   user: string;
   /** Absolute home directory (shown as `~`); the shell starts here. */
   home: string;
   /** `key -> URL` registry used by the `open` command. */
   links: Record<string, string>;
+  /** Identity surfaced by `whoami`, mirrored from `site.config.ts`. */
+  profile?: {
+    name: string;
+    role: string;
+    company: string;
+    nationality: string;
+    knowsAbout: string[];
+    url: string;
+  };
 }
 
 /** Whether the user prefers reduced motion — disables animations and delays. */
@@ -37,6 +46,16 @@ const sleep = (ms: number): Promise<void> =>
 
 /** Shell data fetched by `bootTerminal` (external JSON), keyed by the legacy id. */
 const preloaded: Record<string, string | undefined> = {};
+
+/**
+ * Highest window z-index handed out so far — bumped to raise a window to front.
+ * Capped well under the CRT overlay (`.fx-overlay`, z 9999) and the page chrome,
+ * so windows always stay below them however many times one is clicked.
+ */
+let topZ = 40;
+const raiseZ = (): number => (topZ = Math.min(topZ + 1, 900));
+/** How many extra shell windows have been spawned — used to cascade their position. */
+let spawnCount = 0;
 
 /**
  * Reads and parses shell data by id: a value preloaded from an external JSON
@@ -72,7 +91,41 @@ export async function bootTerminal(): Promise<void> {
     load('/shell-fs.json', 'shell-fs'),
     load('/shell-commands.json', 'shell-commands'),
   ]);
-  initTerminal();
+  initTerminal(document.getElementById('ssh'), document.getElementById('ssh-reconnect'));
+}
+
+/**
+ * Opens an additional, independent shell window by cloning the original one's
+ * markup. The clone shares the page's command registry / filesystem but keeps
+ * its own session (prompt, working directory, on-screen history). It cascades
+ * down-right from the center, opens on top, and removes itself when closed.
+ */
+export function spawnTerminal(): void {
+  const template = document.getElementById('ssh');
+  if (!template) return;
+  const win = template.cloneNode(true) as HTMLElement;
+
+  // Drop ids (they must stay unique) and any leftover window state from the
+  // template; the shell is wired by class, so no id is needed.
+  win.removeAttribute('style');
+  win.removeAttribute('id');
+  win.classList.remove('maximized', 'minimized', 'closed');
+  win.querySelectorAll('[id]').forEach((el) => el.removeAttribute('id'));
+  const out = win.querySelector<HTMLElement>('.ssh-output');
+  if (out) out.innerHTML = '';
+  const inputline = win.querySelector<HTMLElement>('.ssh-inputline');
+  if (inputline) inputline.hidden = true;
+
+  // Cascade each new window down-right from the centered default, and bring it
+  // to the front.
+  spawnCount += 1;
+  const off = 24 * (((spawnCount - 1) % 6) + 1);
+  win.style.left = `calc(50% + ${off}px)`;
+  win.style.top = `calc(50% + ${off}px)`;
+  win.style.zIndex = String(raiseZ());
+
+  document.body.appendChild(win);
+  initTerminal(win, null, false);
 }
 
 /** Escapes the HTML-sensitive characters before injecting into the DOM. */
@@ -94,6 +147,14 @@ export function inline(s: string): string {
       const attrs = url.startsWith('mailto:') ? '' : ' target="_blank" rel="noopener"';
       return `<a href="${url}"${attrs} class="tlink">${text}</a>`;
     },
+  );
+  // Internal command links — `[ls](command:ls)`, emitted by the man "SEE ALSO"
+  // section. Not a navigation: the click/Enter handler in `initTerminal` opens
+  // that command's manual in place (matched via the `data-cmd` attribute).
+  out = out.replace(
+    /\[([^\]]+)\]\(command:([\w-]+)\)/g,
+    (_m, text: string, name: string) =>
+      `<a class="tlink" role="link" tabindex="0" data-cmd="${name}">${text}</a>`,
   );
   out = out.replace(/\*\*([^*]+)\*\*/g, '<strong class="cmd">$1</strong>');
   out = out.replace(/`([^`]+)`/g, '<span class="prompt-path">$1</span>');
@@ -123,19 +184,26 @@ export function format(text: string): string {
 }
 
 /**
- * Entry point: wires the terminal window present in the DOM and starts the
- * connection sequence. No-op (early return) if the window is absent.
+ * Wires a single terminal window and starts its connection sequence. Elements
+ * are queried *within* `win0` (by class), so several independent windows can
+ * coexist on the page. `reconnect` is the companion "reconnect" button shown
+ * when the window is closed; spawned windows pass `null` and are removed from
+ * the DOM on close instead. `allowDeepLink` lets the first window open the URL's
+ * command/document on load; spawned windows always play the full boot + motd.
+ * No-op (early return) if `win0` (or any required child) is absent.
  */
-export function initTerminal(): void {
-  const win0 = document.getElementById('ssh');
-  const output0 = document.getElementById('ssh-output');
-  const inputline0 = document.getElementById('ssh-inputline');
-  const input0 = document.getElementById('ssh-input') as HTMLInputElement | null;
-  const typed0 = document.getElementById('ssh-typed');
-  const prompt0 = document.getElementById('ssh-prompt');
-  const body0 = document.getElementById('ssh-body');
-  const bar0 = document.getElementById('ssh-bar');
-  const reconnect = document.getElementById('ssh-reconnect');
+export function initTerminal(
+  win0: HTMLElement | null,
+  reconnect: HTMLElement | null = null,
+  allowDeepLink = true,
+): void {
+  const output0 = win0?.querySelector<HTMLElement>('.ssh-output') ?? null;
+  const inputline0 = win0?.querySelector<HTMLElement>('.ssh-inputline') ?? null;
+  const input0 = win0?.querySelector<HTMLInputElement>('.ssh-input') ?? null;
+  const typed0 = win0?.querySelector<HTMLElement>('.ssh-typed') ?? null;
+  const prompt0 = win0?.querySelector<HTMLElement>('.ssh-prompt') ?? null;
+  const body0 = win0?.querySelector<HTMLElement>('.ssh-body') ?? null;
+  const bar0 = win0?.querySelector<HTMLElement>('.ssh-bar') ?? null;
   if (!win0 || !output0 || !inputline0 || !input0 || !typed0 || !prompt0 || !body0 || !bar0) return;
   // Reassign to non-null locals: this preserves narrowing inside the closures
   // defined below (TS does not guarantee it on the original variables).
@@ -147,6 +215,15 @@ export function initTerminal(): void {
   const promptEl = prompt0;
   const body = body0;
   const bar = bar0;
+
+  // Clicking anywhere in a window raises it above the others (cascade focus).
+  win.addEventListener(
+    'pointerdown',
+    () => {
+      win.style.zIndex = String(raiseZ());
+    },
+    true,
+  );
 
   const cfg = readJSON<Cfg>('shell-cfg', {
     host: 'localhost',
@@ -209,6 +286,14 @@ export function initTerminal(): void {
   /** A `/root`-subtree path the current user may not access (root-only). */
   function denied(path: string): boolean {
     return !isRoot && (path === ROOT_HOME || path.startsWith(ROOT_HOME + '/'));
+  }
+
+  /**
+   * Write access (create / modify / remove): root may write anywhere, while the
+   * guest is confined to its own home (`/home/guest`) and everything below it.
+   */
+  function canWrite(path: string): boolean {
+    return isRoot || path === HOME || path.startsWith(HOME + '/');
   }
 
   /** Splits an absolute path into its non-empty segments. */
@@ -350,7 +435,8 @@ export function initTerminal(): void {
     let dir: VNode = root;
     let changed = false;
     for (let i = 0; i < parts.length; i++) {
-      if (dir.type !== 'dir') return { error: `cannot create directory '${disp}': Not a directory` };
+      if (dir.type !== 'dir')
+        return { error: `cannot create directory '${disp}': Not a directory` };
       const seg = parts[i];
       const last = i === parts.length - 1;
       const child: VNode | undefined = dir.children[seg];
@@ -376,7 +462,8 @@ export function initTerminal(): void {
     if (nodeAt(abs)) return { changed: false };
     const { parent, base } = splitPath(abs);
     const p = nodeAt(parent);
-    if (!p || p.type !== 'dir') return { error: `cannot touch '${disp}': No such file or directory` };
+    if (!p || p.type !== 'dir')
+      return { error: `cannot touch '${disp}': No such file or directory` };
     p.children[base] = { type: 'file', content: '' };
     return { changed: true };
   }
@@ -385,10 +472,13 @@ export function initTerminal(): void {
   function vfsRm(abs: string, disp: string, recursive: boolean, force: boolean): MutRes {
     const node = nodeAt(abs);
     if (!node)
-      return force ? { changed: false } : { error: `cannot remove '${disp}': No such file or directory` };
+      return force
+        ? { changed: false }
+        : { error: `cannot remove '${disp}': No such file or directory` };
     if (abs === '/' || cwd === abs || cwd.startsWith(`${abs}/`))
       return { error: `cannot remove '${disp}': directory in use` };
-    if (node.type === 'dir' && !recursive) return { error: `cannot remove '${disp}': Is a directory` };
+    if (node.type === 'dir' && !recursive)
+      return { error: `cannot remove '${disp}': Is a directory` };
     const { parent, base } = splitPath(abs);
     const p = nodeAt(parent);
     if (p?.type !== 'dir') return { error: `cannot remove '${disp}': No such file or directory` };
@@ -413,7 +503,8 @@ export function initTerminal(): void {
   ): string | null {
     if (!rawPath) return 'missing operand';
     const abs = resolvePath(rawPath);
-    if (denied(abs)) return `${rawPath}: Permission denied`;
+    // Read protection (root home) first, then the write-access policy.
+    if (denied(abs) || !canWrite(abs)) return `${rawPath}: Permission denied`;
     const res =
       op === 'mkdir'
         ? vfsMkdir(abs, rawPath, !!flags.p)
@@ -453,8 +544,9 @@ export function initTerminal(): void {
 
   /** Colored HTML prompt for the current user & directory (echo + input line). */
   function promptHtml(): string {
-    // root: shows `root@host` and a red `#`; otherwise the configured user and `$`.
-    const user = isRoot ? `root@${cfg.host}` : cfg.user;
+    // Always `user@host` (e.g. `guest@ludovic.toinel.com`); root swaps the name
+    // and turns the `$` symbol into a red `#`.
+    const user = `${isRoot ? 'root' : cfg.user}@${cfg.host}`;
     const sym = isRoot
       ? '<span class="prompt" style="color:#ff6b6b">#</span>'
       : '<span class="prompt">$</span>';
@@ -864,6 +956,29 @@ export function initTerminal(): void {
     if (!inputline.hidden) input.focus();
   });
 
+  // A man "SEE ALSO" link (`a[data-cmd]`) opens that command's manual in place
+  // rather than navigating away. Returns true when it handled the event.
+  const openManLink = (el: HTMLElement): boolean => {
+    const a = el.closest('a[data-cmd]') as HTMLElement | null;
+    if (!a || busy || pendingRead) return false;
+    const name = a.dataset.cmd;
+    if (!name) return false;
+    busy = true;
+    void run(`man ${name}`).then(() => {
+      busy = false;
+      refreshPrompt();
+      if (!isTouch) input.focus();
+    });
+    return true;
+  };
+  output.addEventListener('click', (e: MouseEvent) => {
+    if (openManLink(e.target as HTMLElement)) e.preventDefault();
+  });
+  output.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    if (openManLink(e.target as HTMLElement)) e.preventDefault();
+  });
+
   /* ------------------------- connection ----------------------------- */
 
   /**
@@ -883,8 +998,9 @@ export function initTerminal(): void {
     // skips the SSH boot animation. A command page opens its manual (`man
     // <command>`) instead of executing the command, so the visitor sees what it
     // does before running it; a document deep link still renders the file
-    // directly. The home page (no slug) plays the full connection sequence + motd.
-    const slug = location.pathname.replace(/^\/+|\/+$/g, '');
+    // directly. The home page (no slug) — and every spawned window — plays the
+    // full connection sequence + motd.
+    const slug = allowDeepLink ? location.pathname.replace(/^\/+|\/+$/g, '') : '';
     const isCommand = Boolean(slug && commands[slug]);
     const isDeepLink = isCommand || Boolean(slug && resolveFile(slug));
     if (isCommand) await run(`man ${slug}`);
@@ -948,7 +1064,7 @@ export function initTerminal(): void {
 
   // Keep a moved window within the viewport when the browser is resized.
   window.addEventListener('resize', () => {
-    if (win.classList.contains('maximized') || !win.style.left) return;
+    if (!win.isConnected || win.classList.contains('maximized') || !win.style.left) return;
     const [x, y] = clampToViewport(parseFloat(win.style.left), parseFloat(win.style.top));
     win.style.left = `${x}px`;
     win.style.top = `${y}px`;
@@ -969,10 +1085,14 @@ export function initTerminal(): void {
     }
   }
 
-  /** "Closes" the window and reveals the reconnect button. */
+  /**
+   * "Closes" the window: the first window fades out and reveals its reconnect
+   * button; a spawned window (no reconnect) fades out and removes itself.
+   */
   function closeWin(): void {
     win.classList.add('closed');
     if (reconnect) reconnect.hidden = false;
+    else setTimeout(() => win.remove(), reduce ? 0 : 260);
   }
 
   // Title-bar buttons: close / minimize / maximize.

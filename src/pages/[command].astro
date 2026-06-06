@@ -1,6 +1,8 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import ThemeToggle from '../components/ThemeToggle.astro';
+import FullscreenButton from '../components/FullscreenButton.astro';
+import NewShellButton from '../components/NewShellButton.astro';
 import Terminal from '../components/Terminal.astro';
 import { routes, commandDefs, manToHtml, manMetaDescription } from '../lib/content';
 import { site } from '../site.config.ts';
@@ -12,6 +14,8 @@ import { site } from '../site.config.ts';
 // JSON blob, invisible to engines that don't run JS.
 export function getStaticPaths() {
   const manByName = new Map(commandDefs.map((c) => [c.name, c.man || '']));
+  // Only command names with their own page can be linked from "SEE ALSO".
+  const linkable = new Set(routes.map((r) => r.slug));
   return routes.map((r) => {
     const man = manByName.get(r.slug) || '';
     return {
@@ -19,7 +23,7 @@ export function getStaticPaths() {
       props: {
         label: r.title,
         desc: r.desc,
-        manHtml: man ? manToHtml(man) : '',
+        manHtml: man ? manToHtml(man, (n) => linkable.has(n)) : '',
         manDesc: man ? manMetaDescription(man) : '',
       },
     };
@@ -48,8 +52,10 @@ const description = manDesc || fallback;
 ---
 
 <Layout title={title} description={description}>
-  <div class="fixed right-3 top-3 z-50 sm:right-5 sm:top-5">
+  <div class="fixed right-3 top-3 z-[9000] flex gap-2 sm:right-5 sm:top-5">
+    <NewShellButton />
     <ThemeToggle />
+    <FullscreenButton />
   </div>
 
   <Terminal />

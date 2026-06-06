@@ -18,6 +18,12 @@ describe('inline', () => {
     expect(inline('[me](mailto:a@b.com)')).toBe('<a href="mailto:a@b.com" class="tlink">me</a>');
   });
 
+  it('renders an internal command link (man SEE ALSO)', () => {
+    expect(inline('[ls](command:ls)')).toBe(
+      '<a class="tlink" role="link" tabindex="0" data-cmd="ls">ls</a>',
+    );
+  });
+
   it('renders bold and inline code', () => {
     expect(inline('**bold**')).toBe('<strong class="cmd">bold</strong>');
     expect(inline('`code`')).toBe('<span class="prompt-path">code</span>');

@@ -1,6 +1,6 @@
 ---
 name: msg
-desc: notify Ludovic — e.g. msg coucou ! (owner: msg --subscribe <clé>)
+desc: notify me — e.g. msg hi! (owner: msg --subscribe <key>)
 man: |
   # MSG(1)
 
@@ -28,7 +28,7 @@ man: |
   msg --subscribe ******
 
   ## SEE ALSO
-  mail, open
+  whoami, open
 js: |
   // VAPID public key (safe to expose). Must match push.config.php on the server.
   const VAPID_PUBLIC_KEY = 'BPu1xBZG_NjxxEb6JkWsDw1x4V66tmECdwnW_akjAlCRsahtG0GXbTw1XHZA0Z8_mOLQhbpMeIOeufGd81du9Jk';
@@ -41,17 +41,17 @@ js: |
     return Uint8Array.from(raw, (c) => c.charCodeAt(0));
   };
 
-  // ---- owner: register THIS browser as a recipient (msg --subscribe <clé>) ----
+  // ---- owner: register THIS browser as a recipient (msg --subscribe <key>) ----
   if (args[0] === '--subscribe' || args[0] === '--register') {
     const secret = (args[1] || '').trim();
-    if (!secret) { ctx.error('usage: msg --subscribe <clé>'); return; }
+    if (!secret) { ctx.error('usage: msg --subscribe <key>'); return; }
     if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
-      ctx.error('msg: Web Push non supporté par ce navigateur'); return;
+      ctx.error('msg: Web Push not supported by this browser'); return;
     }
     try {
       const perm = await Notification.requestPermission();
-      if (perm !== 'granted') { ctx.error('msg: autorisation des notifications refusée'); return; }
-      ctx.line('enregistrement du navigateur …');
+      if (perm !== 'granted') { ctx.error('msg: notification permission denied'); return; }
+      ctx.line('registering this browser …');
       const reg = await navigator.serviceWorker.register('/sw.js');
       await navigator.serviceWorker.ready;
       // Drop any stale subscription (e.g. left over from a previous VAPID key).
@@ -66,21 +66,21 @@ js: |
       } catch (err) {
         // The browser could not register with its push service (often Brave, or a
         // firewall / VPN blocking Google FCM). Surface actionable hints.
-        ctx.error(`msg: abonnement refusé par le navigateur — ${err.message || err.name}`);
-        ctx.line('Brave : brave://settings/privacy → active « services Google pour la messagerie push », puis réessaie.');
-        ctx.line('Sinon vérifie qu\'un pare-feu / VPN ne bloque pas le service push (FCM).');
+        ctx.error(`msg: subscription refused by the browser — ${err.message || err.name}`);
+        ctx.line('Brave: brave://settings/privacy → enable "Use Google services for push messaging", then try again.');
+        ctx.line('Otherwise, check that a firewall / VPN is not blocking the push service (FCM).');
         return;
       }
-      const res = await fetch('/push-subscribe.php', {
+      const res = await fetch('/api/push.php?action=subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ secret, subscription: sub.toJSON() }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.ok) {
-        ctx.append('<div class="ln"><span class="accent text-glow">✓ ce navigateur recevra désormais les messages</span></div>');
+        ctx.append('<div class="ln"><span class="accent text-glow">✓ this browser will now receive messages</span></div>');
       } else {
-        ctx.error(`msg: enregistrement refusé — ${data.error || 'HTTP ' + res.status}`);
+        ctx.error(`msg: registration refused — ${data.error || 'HTTP ' + res.status}`);
       }
     } catch (e) {
       ctx.error(`msg: ${e.message || e.name}`);
@@ -91,11 +91,11 @@ js: |
   // ---- anyone: send a message, delivered to Ludovic's browser via Web Push ----
   const text = args.join(' ').trim();
   if (!text) { ctx.error('usage: msg <message>'); return; }
-  ctx.line('envoi du message …');
+  ctx.line('sending message …');
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 12000);
-    const res = await fetch('/msg.php', {
+    const res = await fetch('/api/push.php?action=send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: 'msg=' + encodeURIComponent(text),
@@ -104,14 +104,14 @@ js: |
     clearTimeout(timer);
     const data = await res.json().catch(() => ({}));
     if (res.ok && data.ok) {
-      const note = data.sent > 0 ? '✓ message transmis à Ludovic' : '✓ message envoyé';
+      const note = data.sent > 0 ? '✓ message delivered to Ludovic' : '✓ message sent';
       ctx.append(`<div class="ln"><span class="accent text-glow">${note}</span></div>`);
     } else if (res.status === 429) {
-      ctx.error(`msg: doucement — réessaie dans ${data.retry_after || 10} s`);
+      ctx.error(`msg: slow down — try again in ${data.retry_after || 10} s`);
     } else {
-      ctx.error(`msg: échec — ${data.error || 'HTTP ' + res.status}`);
+      ctx.error(`msg: failed — ${data.error || 'HTTP ' + res.status}`);
     }
   } catch (e) {
-    ctx.error(`msg: service indisponible (${e.message || e.name})`);
+    ctx.error(`msg: service unavailable (${e.message || e.name})`);
   }
 ---

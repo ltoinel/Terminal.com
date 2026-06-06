@@ -1,7 +1,0 @@
-# Security policy for ludovic.toinel.com (RFC 9116)
-Contact: mailto:ludovic@toinel.com
-Contact: https://github.com/ltoinel
-Expires: 2027-06-03T00:00:00.000Z
-Encryption: https://ludovic.toinel.com/pub.asc
-Preferred-Languages: fr, en
-Canonical: https://ludovic.toinel.com/.well-known/security.txt

@@ -31,11 +31,11 @@ js: |
     : /OPR\//.test(ua) ? 'Opera'
     : /Chrome\//.test(ua) ? 'Chrome'
     : /Safari\//.test(ua) ? 'Safari'
-    : 'navigateur';
+    : 'browser';
   const cores = navigator.hardwareConcurrency;
   const mem = navigator.deviceMemory; // Chromium-only; may be undefined
   const dpr = Math.round((window.devicePixelRatio || 1) * 100) / 100;
-  const lang = navigator.language || 'fr-FR';
+  const lang = navigator.language || 'en-US';
   let tz = '';
   try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { /* unsupported */ }
 
@@ -48,10 +48,10 @@ js: |
     ['resolution', `${screen.width}×${screen.height}${dpr !== 1 ? ` @${dpr}x` : ''}`],
     ['theme', amber ? 'amber' : 'crt-green'],
     ['cpu', cores ? `humanware (${cores} threads)` : 'humanware'],
-    ...(mem ? [['memory', `${mem} GiB de café ☕`]] : []),
+    ...(mem ? [['memory', `${mem} GiB of coffee ☕`]] : []),
     ['locale', tz ? `${lang} · ${tz}` : lang],
-    ['uptime', `${new Date().getFullYear() - 1980} ans`],
-    ['roles', 'architecte · hacker · photographe · drone'],
+    ['uptime', `${new Date().getFullYear() - 1980} years`],
+    ['roles', 'architect · hacker · photographer · drone'],
     ['contact', 'cat contact.md'],
   ];
 

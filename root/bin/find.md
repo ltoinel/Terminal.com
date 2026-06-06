@@ -41,7 +41,7 @@ js: |
     else if (!a.startsWith('-')) start = a;
   }
   if (typeF && typeF !== 'f' && typeF !== 'd') {
-    ctx.error(`find: « ${typeF} » : type inconnu (utilise f ou d)`);
+    ctx.error(`find: '${typeF}': unknown type (use f or d)`);
     return;
   }
   // Translate a shell glob (* and ?) into an anchored regex on the basename.

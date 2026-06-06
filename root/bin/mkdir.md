@@ -1,6 +1,6 @@
 ---
 name: mkdir
-desc: create a directory — e.g. mkdir -p projets/2026
+desc: create a directory — e.g. mkdir -p projects/2026
 man: |
   # MKDIR(1)
 
@@ -20,7 +20,7 @@ man: |
 
   ## EXAMPLES
   mkdir notes
-  mkdir -p projets/2026/photos
+  mkdir -p projects/2026/photos
 
   ## SEE ALSO
   touch, rm, ls, cd

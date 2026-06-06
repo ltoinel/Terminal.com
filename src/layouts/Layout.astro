@@ -23,9 +23,10 @@ const ogImage = new URL(site.ogImage, site.url).href;
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
-    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
-    <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png" />
+    <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/favicon-192.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.json" />
     <link rel="canonical" href={canonical} />
@@ -117,11 +118,60 @@ const ogImage = new URL(site.ogImage, site.url).href;
       }
     </nav>
 
+    <!-- Update toast: shown when a new service worker is waiting (i.e. the site
+         was redeployed with a new build version, see src/pages/sw.js.ts). -->
+    <div id="sw-toast" role="status" aria-live="polite" hidden>
+      <span>Nouvelle version disponible</span>
+      <button type="button" id="sw-reload">Recharger</button>
+    </div>
+
     <!-- Register the service worker: caches the shell data (shared across
-         navigations) and enables Web Push. Best-effort, after load. -->
+         navigations) and enables Web Push. Best-effort, after load. When a new
+         worker finishes installing while one is already in control, surface the
+         toast; clicking "Recharger" tells it to skipWaiting, then reloads. -->
     <script is:inline>
       if ('serviceWorker' in navigator) {
-        addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+        addEventListener('load', () => {
+          navigator.serviceWorker
+            .register('/sw.js')
+            .then((reg) => {
+              const toast = document.getElementById('sw-toast');
+              const reload = document.getElementById('sw-reload');
+
+              // Reveal the toast and wire its button to the given waiting worker.
+              const offer = (waiting) => {
+                if (!waiting || !toast) return;
+                toast.hidden = false;
+                reload.onclick = () => {
+                  reload.disabled = true;
+                  waiting.postMessage({ type: 'SKIP_WAITING' });
+                };
+              };
+
+              // A worker may already be waiting from a previous visit.
+              if (reg.waiting && navigator.serviceWorker.controller) offer(reg.waiting);
+
+              // Or one may install now: watch it reach "installed" while a worker
+              // is already in control (an update, not the very first install).
+              reg.addEventListener('updatefound', () => {
+                const sw = reg.installing;
+                if (!sw) return;
+                sw.addEventListener('statechange', () => {
+                  if (sw.state === 'installed' && navigator.serviceWorker.controller) offer(sw);
+                });
+              });
+            })
+            .catch(() => {});
+
+          // The new worker took control after SKIP_WAITING — reload once to pick
+          // up the fresh build. The guard avoids an infinite reload loop.
+          let reloaded = false;
+          navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (reloaded) return;
+            reloaded = true;
+            location.reload();
+          });
+        });
       }
     </script>
   </body>

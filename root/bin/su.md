@@ -1,6 +1,6 @@
 ---
 name: su
-desc: devenir superutilisateur (root)
+desc: become the superuser (root)
 man: |
   # SU(1)
 

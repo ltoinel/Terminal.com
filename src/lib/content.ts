@@ -116,8 +116,7 @@ function metaFromMarkdown(md: string, slug: string): { title: string; desc: stri
 
 const escapeHtml = (s: string): string =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-const inlineMd = (s: string): string =>
-  escapeHtml(s).replace(/`([^`]+)`/g, '<code>$1</code>');
+const inlineMd = (s: string): string => escapeHtml(s).replace(/`([^`]+)`/g, '<code>$1</code>');
 
 /**
  * Render a command's `man` markdown to semantic HTML for server-side SEO: ATX
@@ -125,12 +124,20 @@ const inlineMd = (s: string): string =>
  * <p>. The terminal still renders the rich, interactive version on the client;
  * this is the crawlable mirror, emitted inside a visually-hidden block.
  */
-export function manToHtml(md: string): string {
+export function manToHtml(md: string, isLinkable: (name: string) => boolean = () => false): string {
   let html = '';
   let para: string[] = [];
+  let inSeeAlso = false;
   const flush = () => {
     if (para.length) {
-      html += `<p>${inlineMd(para.join(' '))}</p>`;
+      const joined = para.join(' ');
+      // In "SEE ALSO", turn each command name that owns a page into a link to it.
+      const inner = inSeeAlso
+        ? escapeHtml(joined).replace(/[\w-]+/g, (tok) =>
+            isLinkable(tok) ? `<a href="/${tok}">${tok}</a>` : tok,
+          )
+        : inlineMd(joined);
+      html += `<p>${inner}</p>`;
       para = [];
     }
   };
@@ -139,12 +146,15 @@ export function manToHtml(md: string): string {
     const h1 = line.match(/^#\s+(.*)$/);
     if (h2) {
       flush();
+      inSeeAlso = h2[1].trim() === 'SEE ALSO';
       html += `<h2>${inlineMd(h2[1])}</h2>`;
     } else if (h1) {
       flush();
+      inSeeAlso = false;
       html += `<h1>${inlineMd(h1[1])}</h1>`;
     } else if (line.trim() === '') {
       flush();
+      inSeeAlso = false; // a blank line ends the section
     } else {
       para.push(line.trim());
     }

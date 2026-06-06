@@ -35,7 +35,7 @@ js: |
   try {
     known = JSON.parse(localStorage.getItem(KH_KEY) || '[]');
   } catch {
-    /* corrompu / indisponible */
+    /* corrupt / unavailable */
   }
   if (!Array.isArray(known)) known = [];
 
@@ -54,7 +54,7 @@ js: |
 
     if (!['yes', 'y', 'oui', 'o'].includes(answer)) {
       ctx.sysLine('Host key verification failed.');
-      ctx.line('Connexion refusée. Clique sur ⏻ reconnect pour réessayer.');
+      ctx.line('Connection refused. Click ⏻ reconnect to try again.');
       ctx.exit(); // closes the window and reveals the reconnect button
       return;
     }
@@ -64,7 +64,7 @@ js: |
       known.push(host);
       localStorage.setItem(KH_KEY, JSON.stringify(known));
     } catch {
-      /* stockage indisponible — on demandera à nouveau */
+      /* storage unavailable — we'll ask again next time */
     }
     ctx.sysLine(`Warning: Permanently added '${host}' (ED25519) to the list of known hosts.`);
     await ctx.sleep(420);

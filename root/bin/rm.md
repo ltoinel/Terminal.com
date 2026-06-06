@@ -23,7 +23,7 @@ man: |
 
   ## EXAMPLES
   rm notes.txt
-  rm -r projets/2026
+  rm -r projects/2026
   rm -f maybe-absent.txt
 
   ## SEE ALSO

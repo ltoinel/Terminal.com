@@ -4,7 +4,20 @@ import { site, openLinks } from '../site.config.ts';
 // Runtime config injected into the client shell (read back via #shell-cfg). It is
 // tiny, so it stays inline; the large filesystem + command registry are fetched
 // from /shell-fs.json and /shell-commands.json (cached, shared across pages).
-const cfg = { ...site.shell, links: openLinks };
+const cfg = {
+  ...site.shell,
+  links: openLinks,
+  // Identity surfaced by the `whoami` command — mirrored from the site config so
+  // there is a single source of truth.
+  profile: {
+    name: site.name,
+    role: site.role,
+    company: site.company,
+    nationality: site.nationality,
+    knowsAbout: site.knowsAbout,
+    url: site.url,
+  },
+};
 const safe = (o: unknown) => JSON.stringify(o).replace(/</g, '\\u003c');
 ---
 
@@ -35,13 +48,14 @@ const safe = (o: unknown) => JSON.stringify(o).replace(/</g, '\\u003c');
   </header>
 
   <div class="ssh-body" id="ssh-body" role="log" aria-live="polite">
-    <div id="ssh-output"></div>
+    <div class="ssh-output" id="ssh-output"></div>
     <div class="ssh-inputline" id="ssh-inputline" hidden>
       <span class="ssh-prompt" id="ssh-prompt"></span><span
         class="ssh-typed"
         id="ssh-typed"
         aria-hidden="true"></span>
       <input
+        class="ssh-input"
         id="ssh-input"
         type="text"
         autocomplete="off"

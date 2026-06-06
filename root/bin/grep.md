@@ -46,13 +46,13 @@ js: |
   }
   const pattern = rest.shift();
   if (pattern == null) {
-    ctx.error('usage: grep [-inr] <motif> <fichier...>');
+    ctx.error('usage: grep [-inr] <pattern> <file...>');
     return;
   }
   let targets = rest;
   if (!targets.length) targets = rec ? ['.'] : null;
   if (!targets) {
-    ctx.error('grep: aucun fichier indiqué (ajoute -r pour chercher récursivement)');
+    ctx.error('grep: no file given (add -r to search recursively)');
     return;
   }
 
@@ -82,7 +82,7 @@ js: |
     const rd = ctx.read(t);
     if (rd.error === 'Is a directory') {
       if (rec) walk(t);
-      else ctx.error(`grep: ${t}: c'est un dossier (ajoute -r)`);
+      else ctx.error(`grep: ${t}: is a directory (add -r)`);
     } else if (rd.error) {
       ctx.error(`grep: ${t}: ${rd.error}`);
     } else {

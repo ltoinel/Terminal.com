@@ -3,9 +3,7 @@ dist/
 node_modules/
 .env
 .env.production
-.claude/settings.local.json
+.claude/
 vendor/
 push.config.php
-push-store.json
-push-rate.json
-msg.log
+data/
