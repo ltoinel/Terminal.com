@@ -1,15 +1,15 @@
 ---
-name: md5
+name: md5sum
 desc: compute an MD5 checksum — e.g. md5 hello
-alias: md5sum
+alias: md5
 man: |
-  # MD5(1)
+  # MD5SUM(1)
 
   ## NAME
-  md5 — compute an MD5 checksum
+  md5sum — compute an MD5 checksum
 
   ## SYNOPSIS
-  md5 <text...>
+  md5sum <text...>
 
   ## DESCRIPTION
   Computes the MD5 checksum of the given text (UTF-8 encoded) and prints
@@ -20,8 +20,8 @@ man: |
   a checksum and as a companion to hashcat.
 
   ## EXAMPLES
-  md5 hello
-  md5 The quick brown fox
+  md5sum hello
+  md5sum The quick brown fox
 
   ## SEE ALSO
   sha256sum, base64, hashcat

@@ -60,7 +60,7 @@ js: |
   const steps = [
     'Phosphor 1.0 kernel loaded',
     `${ctx.commands.length} commands mounted on /bin`,
-    'Encrypted SSH link (ED25519) established',
+    'Encrypted LTS link established',
     'CRT theme calibrated · glow nominal',
     'Coffee: brewing ☕',
   ];

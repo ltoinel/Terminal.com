@@ -604,7 +604,8 @@ export function initTerminal(
    * input and resolves with what the user types when they press Enter. Used by
    * commands (via `ctx.ask`) — e.g. the `boot` yes/no connection confirmation.
    */
-  function readLine(question: string): Promise<string> {
+  function readLine(question: string, secret = false): Promise<string> {
+    secretRead = secret;
     promptEl.innerHTML = `<span class="out">${escapeHtml(question)}</span>&nbsp;`;
     input.value = '';
     inputline.hidden = false;
@@ -614,6 +615,7 @@ export function initTerminal(
     return new Promise((resolve) => {
       pendingRead = (value) => {
         inputline.hidden = true;
+        secretRead = false;
         resolve(value);
       };
     });
@@ -637,6 +639,9 @@ export function initTerminal(
   // When set, the next Enter resolves an interactive `ctx.ask()` read instead of
   // running a command (used by `boot` for the yes/no connection prompt).
   let pendingRead: ((value: string) => void) | null = null;
+  // True while a secret read is in progress (e.g. `su` password): the visible
+  // input is rendered as bullets instead of the typed characters.
+  let secretRead = false;
 
   /* ----------------------------- output ----------------------------- */
 
@@ -703,6 +708,12 @@ export function initTerminal(
   function renderInput(): void {
     const val = input.value;
     const pos = input.selectionStart ?? val.length;
+    if (secretRead) {
+      // Password-style read: render bullets while keeping the caret position.
+      typed.innerHTML =
+        '•'.repeat(pos) + '<span class="ssh-caret"></span>' + '•'.repeat(val.length - pos);
+      return;
+    }
     typed.innerHTML =
       escapeHtml(val.slice(0, pos)) +
       '<span class="ssh-caret"></span>' +
@@ -806,7 +817,8 @@ export function initTerminal(
       },
       su: (target?: string) => su(target),
       // Interactive prompt: shows `question`, resolves with the user's typed line.
-      ask: (question: string) => readLine(question),
+      // Pass `{ secret: true }` to mask the input (password-style read).
+      ask: (question: string, opts?: { secret?: boolean }) => readLine(question, !!(opts && opts.secret)),
       // `exit` from an `su` shell returns to the previous user; at the top level it closes.
       exit: () => {
         if (!popIdentity()) closeWin();
@@ -964,8 +976,15 @@ export function initTerminal(
       input.value = '';
       renderInput();
       busy = true;
+      // Hide the prompt while the command runs, so a long-running command (e.g.
+      // webllm loading a model, hashcat cracking) doesn't leave a stray, inert
+      // prompt on screen that looks ready for input. An interactive command
+      // re-shows the line itself via `ctx.ask` (readLine), and it is restored
+      // here once the command finishes.
+      inputline.hidden = true;
       await run(val);
       busy = false;
+      inputline.hidden = false;
       refreshPrompt(); // the command may have changed the working directory
       input.focus();
     } else if (e.key === 'ArrowUp') {

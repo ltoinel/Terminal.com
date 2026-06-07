@@ -12,8 +12,9 @@ man: |
 
   ## DESCRIPTION
   Opens a root shell and switches to /root, previously inaccessible.
-  Only the root user exists. Return to your previous identity with
-  exit.
+  Authentication is required: enter the root password when prompted
+  (the input is hidden). Only the root user exists. Return to your
+  previous identity with exit.
 
   ## EXAMPLES
   su
@@ -22,6 +23,9 @@ man: |
   ## SEE ALSO
   exit, cd, sudo
 js: |
+  // Authenticate (masked input) before elevating. The password is "password".
+  const pw = await ctx.ask('Mot de passe :', { secret: true });
+  if (pw !== 'password') { ctx.error("su: échec d'authentification"); return; }
   const err = ctx.su(ctx.args[0]);
   if (err) ctx.error(err);
 ---
