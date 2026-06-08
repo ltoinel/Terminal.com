@@ -455,10 +455,11 @@ export function initTerminal(
   // *under* the user's local changes (rather than freezing a whole stale tree).
   const FS_KEY = 'ltsh.fs';
   interface FsOp {
-    op: 'mkdir' | 'touch' | 'rm';
+    op: 'mkdir' | 'touch' | 'rm' | 'write';
     path: string; // absolute & normalized, so replay is independent of cwd
     p?: boolean; // mkdir -p
     r?: boolean; // rm -r
+    content?: string; // write: the file's full contents
   }
   type MutRes = { error?: string; changed?: boolean };
 
@@ -507,6 +508,24 @@ export function initTerminal(
     return { changed: true };
   }
 
+  /** Writes a file's full contents, creating it or overwriting an existing file
+   * (the parent directory must already exist; a directory target is refused). */
+  function vfsWrite(abs: string, disp: string, content: string): MutRes {
+    const existing = nodeAt(abs);
+    if (existing) {
+      if (existing.type === 'dir') return { error: `cannot write '${disp}': Is a directory` };
+      if (existing.content === content) return { changed: false }; // no-op: identical
+      existing.content = content;
+      return { changed: true };
+    }
+    const { parent, base } = splitPath(abs);
+    const p = nodeAt(parent);
+    if (!p || p.type !== 'dir')
+      return { error: `cannot write '${disp}': No such file or directory` };
+    p.children[base] = { type: 'file', content };
+    return { changed: true };
+  }
+
   /** Removes a file, or a directory with `-r`. `-f` ignores a missing target. */
   function vfsRm(abs: string, disp: string, recursive: boolean, force: boolean): MutRes {
     const node = nodeAt(abs);
@@ -538,7 +557,7 @@ export function initTerminal(
   function fsMutate(
     op: FsOp['op'],
     rawPath: string,
-    flags: { p?: boolean; r?: boolean; f?: boolean },
+    flags: { p?: boolean; r?: boolean; f?: boolean; content?: string },
   ): string | null {
     if (!rawPath) return 'missing operand';
     const abs = resolvePath(rawPath);
@@ -549,12 +568,19 @@ export function initTerminal(
         ? vfsMkdir(abs, rawPath, !!flags.p)
         : op === 'touch'
           ? vfsTouch(abs, rawPath)
-          : vfsRm(abs, rawPath, !!flags.r, !!flags.f);
+          : op === 'write'
+            ? vfsWrite(abs, rawPath, flags.content ?? '')
+            : vfsRm(abs, rawPath, !!flags.r, !!flags.f);
     if (res.error) return res.error;
     if (res.changed) {
+      // A fresh write fully defines the file, so older writes to the same path are
+      // redundant — drop them so repeated saves don't grow the journal unbounded.
+      if (op === 'write')
+        fsJournal = fsJournal.filter((o) => !(o.op === 'write' && o.path === abs));
       const entry: FsOp = { op, path: abs };
       if (flags.p) entry.p = true;
       if (flags.r) entry.r = true;
+      if (op === 'write') entry.content = flags.content ?? '';
       fsJournal.push(entry);
       saveJournal();
     }
@@ -567,11 +593,13 @@ export function initTerminal(
     if (Array.isArray(stored)) {
       fsJournal = stored.filter(
         (o): o is FsOp =>
-          !!o && ['mkdir', 'touch', 'rm'].includes(o.op) && typeof o.path === 'string',
+          !!o && ['mkdir', 'touch', 'rm', 'write'].includes(o.op) && typeof o.path === 'string',
       );
       for (const o of fsJournal) {
         if (o.op === 'mkdir') vfsMkdir(o.path, o.path, !!o.p);
         else if (o.op === 'touch') vfsTouch(o.path, o.path);
+        else if (o.op === 'write')
+          vfsWrite(o.path, o.path, typeof o.content === 'string' ? o.content : '');
         else vfsRm(o.path, o.path, !!o.r, true);
       }
     }
@@ -797,6 +825,8 @@ export function initTerminal(
       // returns an error string, or null on success.
       mkdir: (path: string, parents = false) => fsMutate('mkdir', path, { p: parents }),
       touch: (path: string) => fsMutate('touch', path, {}),
+      // Writes (or overwrites) a file's full contents — persisted like mkdir/touch.
+      write: (path: string, content: string) => fsMutate('write', path, { content }),
       rm: (path: string, recursive = false, force = false) =>
         fsMutate('rm', path, { r: recursive, f: force }),
       print: (md: string) => printBlock(md),
@@ -818,7 +848,8 @@ export function initTerminal(
       su: (target?: string) => su(target),
       // Interactive prompt: shows `question`, resolves with the user's typed line.
       // Pass `{ secret: true }` to mask the input (password-style read).
-      ask: (question: string, opts?: { secret?: boolean }) => readLine(question, !!(opts && opts.secret)),
+      ask: (question: string, opts?: { secret?: boolean }) =>
+        readLine(question, !!(opts && opts.secret)),
       // `exit` from an `su` shell returns to the previous user; at the top level it closes.
       exit: () => {
         if (!popIdentity()) closeWin();
