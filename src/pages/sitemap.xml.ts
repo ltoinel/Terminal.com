@@ -31,11 +31,12 @@ export const GET: APIRoute = () => {
     // Home: most recent change across all listed pages.
     {
       loc: `${BASE}/`,
-      lastmod: routes
-        .map((r) => lastmod(r.slug))
-        .filter((d): d is string => d !== null)
-        .sort()
-        .pop() ?? null,
+      lastmod:
+        routes
+          .map((r) => lastmod(r.slug))
+          .filter((d): d is string => d !== null)
+          .sort()
+          .pop() ?? null,
     },
     ...routes.map((r) => ({ loc: `${BASE}/${r.slug}/`, lastmod: lastmod(r.slug) })),
   ];

@@ -87,8 +87,7 @@ const homeNode = site.shell.home
   .replace(/^\/+|\/+$/g, '')
   .split('/')
   .reduce<VNode | undefined>(
-    (node, seg) =>
-      node && node.type === 'dir' ? node.children[seg] : undefined,
+    (node, seg) => (node && node.type === 'dir' ? node.children[seg] : undefined),
     tree as VNode,
   );
 const homeDir = homeNode?.type === 'dir' ? homeNode : undefined;

@@ -16,9 +16,11 @@ import { site } from '../site.config.ts';
 
   <Terminal />
 
-  {/* Always-rendered, crawlable identity for the home page: the terminal is the
+  {
+    /* Always-rendered, crawlable identity for the home page: the terminal is the
       only visible content and it boots client-side, so without this the `/`
-      document carries no real topical text or <h1> for engines. Visually hidden. */}
+      document carries no real topical text or <h1> for engines. Visually hidden. */
+  }
   <section class="sr-only" aria-label="Présentation">
     <h1>{site.name} — {site.role} @ {site.company}</h1>
     <p>{site.bio}</p>

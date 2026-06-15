@@ -45,7 +45,7 @@ export const site = {
     'Drones FPV',
     'Intelligence Artificielle générative',
     'OSINT',
-    'Web'
+    'Web',
   ],
 
   /* ----------------------------- site & SEO --------------------------- */
@@ -75,21 +75,21 @@ export const site = {
   /* --------------------------- profiles & links ----------------------- */
   // Each entry can feed the `open` command, the schema.org `sameAs`, or both.
   links: [
-    { url: 'https://www.geeek.org', open: 'blog', sameAs: true},
+    { url: 'https://www.geeek.org', open: 'blog', sameAs: true },
     { url: 'https://apollovan.fr', open: 'apollovan', sameAs: true },
     { url: 'https://github.com/ltoinel', open: 'github', sameAs: true },
     { url: 'https://www.linkedin.com/in/ltoinel', open: 'linkedin', sameAs: true },
     { url: 'https://www.facebook.com/ltoinel', open: 'facebook', sameAs: true },
     { url: 'https://soundcloud.com/ludovic-toinel', open: 'soundcloud', sameAs: true },
-    { url: 'https://app.hackthebox.com/profile/290482', open: 'htb', sameAs: true},
-    { url: 'https://x.com/ltoinel', open: "x", sameAs: true },
+    { url: 'https://app.hackthebox.com/profile/290482', open: 'htb', sameAs: true },
+    { url: 'https://x.com/ltoinel', open: 'x', sameAs: true },
     { url: 'https://unsplash.com/fr/@ltoinel', open: 'photographie', sameAs: true },
     { url: 'https://www.geeek.org/tag/drones/', open: 'drones-fpv' },
     { url: 'https://tekkit.io/actu/portraits/ludovic7777', open: 'tekkit', sameAs: true },
     { url: 'https://www.youtube.com/@LudovicToinel', open: 'youtube', sameAs: true },
     { url: 'https://www.instagram.com/ltoinel', open: 'instagram', sameAs: true },
     { url: 'https://www.twitch.tv/ltoinel', open: 'twitch', sameAs: true },
-    { url: 'https://ko-fi.com/ltoinel', open: 'kofi', sameAs: true }
+    { url: 'https://ko-fi.com/ltoinel', open: 'kofi', sameAs: true },
   ] as SiteLink[],
 };
 
