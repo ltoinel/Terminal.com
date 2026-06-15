@@ -15,6 +15,8 @@
  * rendering logic can be unit-tested without a DOM.
  */
 
+import { THEMES, applyTheme, currentTheme } from './themes';
+
 /** Configuration injected via `#shell-cfg`. */
 interface Cfg {
   /** Host shown in prompts and the SSH animation. */
@@ -841,10 +843,11 @@ export function initTerminal(
         output.innerHTML = '';
       },
       open: (url: string) => window.open(url, '_blank', 'noopener'),
-      theme: (amber: boolean) => {
-        document.documentElement.classList.toggle('amber', amber);
-        localStorage.setItem('theme', amber ? 'amber' : 'green');
-      },
+      // Display themes (CRT phosphor palettes). `theme` applies one (green clears
+      // the attribute); `themes`/`currentTheme` let the `theme` command list and cycle.
+      theme: (name: string) => applyTheme(name),
+      themes: THEMES,
+      currentTheme: () => currentTheme(),
       su: (target?: string) => su(target),
       // Interactive prompt: shows `question`, resolves with the user's typed line.
       // Pass `{ secret: true }` to mask the input (password-style read).

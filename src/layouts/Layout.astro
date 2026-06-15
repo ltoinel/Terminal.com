@@ -27,6 +27,7 @@ const ogImage = new URL(site.ogImage, site.url).href;
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
     <link rel="icon" href="/favicon.ico" sizes="48x48" />
     <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
     <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png" />
@@ -88,13 +89,14 @@ const ogImage = new URL(site.ogImage, site.url).href;
     <!-- schema.org structured data -->
     <JsonLd breadcrumb={breadcrumb} />
 
-    <!-- Anti-FOUC: flag JS (reveals the terminal) and apply the theme
-         (`.amber` only if chosen) before first paint -->
+    <!-- Anti-FOUC: flag JS (reveals the terminal) and apply the saved theme
+         before first paint. Green (the default) carries no `data-theme`; any
+         other stored value is reflected as-is (an unknown one falls back to the
+         green palette via CSS). Keep in sync with src/lib/themes.ts. -->
     <script is:inline>
       document.documentElement.classList.add('js');
-      if (localStorage.getItem('theme') === 'amber') {
-        document.documentElement.classList.add('amber');
-      }
+      const t = localStorage.getItem('theme');
+      if (t && t !== 'green') document.documentElement.dataset.theme = t;
     </script>
   </head>
 

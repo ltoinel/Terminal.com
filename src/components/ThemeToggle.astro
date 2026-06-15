@@ -5,18 +5,26 @@ import { Icon } from 'astro-icon/components';
 <button
   id="theme-toggle"
   type="button"
-  aria-label="Basculer le thème (vert CRT / ambre)"
+  aria-label="Changer le thème (CRT)"
   class="chip font-mono text-sm"
 >
   <Icon name="lucide:square-terminal" class="h-4 w-4" />
-  <span class="[html.amber_&]:hidden">crt</span>
-  <span class="hidden [html.amber_&]:inline">amber</span>
+  <span id="theme-label">crt</span>
 </button>
 
 <script>
+  import { THEMES, applyTheme, currentTheme } from '../lib/themes';
+
   const btn = document.getElementById('theme-toggle');
+  const label = document.getElementById('theme-label');
+  // `green` shows as "crt" in the button (its historical label).
+  const display = (t: string) => (t === 'green' ? 'crt' : t);
+
+  if (label) label.textContent = display(currentTheme());
+
   btn?.addEventListener('click', () => {
-    const isAmber = document.documentElement.classList.toggle('amber');
-    localStorage.setItem('theme', isAmber ? 'amber' : 'green');
+    const next = THEMES[(THEMES.indexOf(currentTheme()) + 1) % THEMES.length];
+    applyTheme(next);
+    if (label) label.textContent = display(next);
   });
 </script>

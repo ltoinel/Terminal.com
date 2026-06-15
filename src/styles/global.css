@@ -3,7 +3,9 @@
 /* ============================================================================
    TERMINAL / PHOSPHOR THEME — ludovic.toinel.com
    CRT font (VT323) for display, IBM Plex Mono for body text.
-   Default theme = green phosphor on black. `.amber` = amber monochrome CRT.
+   Default theme = green phosphor on black (no attribute); other phosphor
+   palettes apply via `html[data-theme='<id>']` (amber, ice, synthwave, white,
+   red). The theme list lives in src/lib/themes.ts.
    ========================================================================== */
 
 /* Self-hosted fonts (latin subset) — no third-party request, CSP-friendly.
@@ -71,7 +73,7 @@
   --grain: 0.05;
 }
 
-html.amber {
+html[data-theme='amber'] {
   /* --- Amber monochrome (CRT) --- single phosphor colour, brightness levels --- */
   --bg: #0a0700;
   --bg-elev: #120c01;
@@ -89,6 +91,94 @@ html.amber {
   --sel-fg: #0a0700;
   --glow: 0 0 6px rgba(255, 176, 0, 0.45);
   --glow-strong: 0 0 14px rgba(255, 176, 0, 0.6);
+  --scan: 0.04;
+  --grain: 0.05;
+}
+
+html[data-theme='ice'] {
+  /* --- Ice: cyan phosphor on deep blue-black --- */
+  --bg: #03070c;
+  --bg-elev: #060d14;
+  --bg-bar: #0a1620;
+  --fg: #a9dfe8;
+  --fg-bright: #e6fbff;
+  --green: #38d6ef; /* primary phosphor (cyan) */
+  --green-dim: #2391a3;
+  --amber: #7fd4ff;
+  --cyan: #76e6f0;
+  --dim: #3f6b78;
+  --border: #123442;
+  --border-bright: #1f5a6e;
+  --sel-bg: #38d6ef;
+  --sel-fg: #04121a;
+  --glow: 0 0 6px rgba(56, 214, 239, 0.45);
+  --glow-strong: 0 0 14px rgba(56, 214, 239, 0.55);
+  --scan: 0.04;
+  --grain: 0.05;
+}
+
+html[data-theme='synthwave'] {
+  /* --- Synthwave: neon magenta phosphor, cyan accents, purple-black --- */
+  --bg: #0e0420;
+  --bg-elev: #160833;
+  --bg-bar: #1d0d44;
+  --fg: #f1b3ff;
+  --fg-bright: #ffe6ff;
+  --green: #ff5ed6; /* primary phosphor (magenta) */
+  --green-dim: #b53b97;
+  --amber: #ffcf6b;
+  --cyan: #57e0ff;
+  --dim: #7a4f9e;
+  --border: #3a1d5e;
+  --border-bright: #5e2f8e;
+  --sel-bg: #ff5ed6;
+  --sel-fg: #1a0630;
+  --glow: 0 0 7px rgba(255, 94, 214, 0.5);
+  --glow-strong: 0 0 16px rgba(87, 224, 255, 0.6);
+  --scan: 0.05;
+  --grain: 0.05;
+}
+
+html[data-theme='white'] {
+  /* --- White: P4 monochrome, classic black & white CRT --- */
+  --bg: #050607;
+  --bg-elev: #0b0d0f;
+  --bg-bar: #14181b;
+  --fg: #c2cbd1;
+  --fg-bright: #ffffff;
+  --green: #e4ebf0; /* primary phosphor (white) */
+  --green-dim: #8a949b;
+  --amber: #d6dee4;
+  --cyan: #cdd6dc;
+  --dim: #5c656b;
+  --border: #232a2f;
+  --border-bright: #3d474d;
+  --sel-bg: #e4ebf0;
+  --sel-fg: #07090a;
+  --glow: 0 0 6px rgba(228, 235, 240, 0.35);
+  --glow-strong: 0 0 14px rgba(228, 235, 240, 0.45);
+  --scan: 0.05;
+  --grain: 0.06;
+}
+
+html[data-theme='red'] {
+  /* --- Red: red phosphor on near-black --- */
+  --bg: #0a0303;
+  --bg-elev: #140605;
+  --bg-bar: #1e0908;
+  --fg: #f0a59c;
+  --fg-bright: #ffe3de;
+  --green: #ff5446; /* primary phosphor (red) */
+  --green-dim: #b3392f;
+  --amber: #ff9a6b;
+  --cyan: #ff7a6a;
+  --dim: #8a4640;
+  --border: #3a1512;
+  --border-bright: #5e231d;
+  --sel-bg: #ff5446;
+  --sel-fg: #160403;
+  --glow: 0 0 6px rgba(255, 84, 70, 0.45);
+  --glow-strong: 0 0 14px rgba(255, 84, 70, 0.55);
   --scan: 0.04;
   --grain: 0.05;
 }
@@ -602,7 +692,9 @@ html:not(.js) .ssh-win {
   pointer-events: none;
   opacity: 0.4;
 }
-html.amber .fx-matrix {
+/* The green digital rain belongs to the default theme only; any selected
+   theme (which sets `data-theme`) hides it. */
+html[data-theme] .fx-matrix {
   display: none;
 }
 @media (prefers-reduced-motion: reduce) {
