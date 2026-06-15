@@ -8,10 +8,15 @@ import '../styles/global.css';
 interface Props {
   title?: string;
   description?: string;
+  /** Leaf label for the schema.org breadcrumb (sub-pages only; omit on home). */
+  breadcrumb?: string;
 }
 
-const { title = `${site.name} — ${site.role} @ ${site.company}`, description = site.tagline } =
-  Astro.props;
+const {
+  title = `${site.name} - ${site.role} @ ${site.company}`,
+  description = site.tagline,
+  breadcrumb,
+} = Astro.props;
 
 const canonical = new URL(Astro.url.pathname, site.url).href;
 const ogImage = new URL(site.ogImage, site.url).href;
@@ -68,7 +73,6 @@ const ogImage = new URL(site.ogImage, site.url).href;
     <meta name="twitter:image" content={ogImage} />
 
     <link rel="me" href={site.wikidata} />
-    <link rel="author" href="/humans.txt" />
 
     <!-- Fonts: VT323 (CRT) + IBM Plex Mono (body) — self-hosted (see global.css
          @font-face). Preload the two faces used above the fold to avoid FOUT. -->
@@ -82,7 +86,7 @@ const ogImage = new URL(site.ogImage, site.url).href;
     />
 
     <!-- schema.org structured data -->
-    <JsonLd />
+    <JsonLd breadcrumb={breadcrumb} />
 
     <!-- Anti-FOUC: flag JS (reveals the terminal) and apply the theme
          (`.amber` only if chosen) before first paint -->
@@ -124,10 +128,6 @@ const ogImage = new URL(site.ogImage, site.url).href;
             ))
           }
         </nav>
-        <p class="ns-note">
-          Ce portail est un terminal interactif qui nécessite JavaScript. Activez-le pour explorer
-          le shell.
-        </p>
       </section>
     </noscript>
 

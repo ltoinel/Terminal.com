@@ -29,7 +29,9 @@
     let last = 0;
     const tick = (now: number) => {
       requestAnimationFrame(tick);
-      if (now - last < 55) return; // ~18 fps — gentle
+      // Skip all drawing while the tab is hidden (rAF is already throttled then,
+      // but this avoids any wasted repaint/CPU on browsers that still fire it).
+      if (document.hidden || now - last < 55) return; // ~18 fps — gentle
       last = now;
 
       // Trail fade using the page background colour.

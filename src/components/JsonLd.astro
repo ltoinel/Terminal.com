@@ -1,15 +1,23 @@
 ---
 /**
- * schema.org `Person` structured data, emitted as a
- * `<script type="application/ld+json">` block in the document <head>.
+ * schema.org structured data, emitted as a `<script type="application/ld+json">`
+ * block in the document <head>, as a single `@graph`:
+ *   - `Person`  — the site owner (identity, always present)
+ *   - `WebSite` — the site itself, published by that Person (always present)
+ *   - `BreadcrumbList` — Home › <page>, only on sub-pages (when `breadcrumb` set)
  *
  * Self-contained: it reads the central `site.config.ts`, so identity changes in
  * one place propagate to the structured data.
  */
 import { site, sameAs } from '../site.config.ts';
 
-const jsonLd = {
-  '@context': 'https://schema.org',
+interface Props {
+  /** Leaf page label (command/document title). Omit on the home page. */
+  breadcrumb?: string;
+}
+const { breadcrumb } = Astro.props;
+
+const person = {
   '@type': 'Person',
   '@id': `${site.url}/#person`,
   name: site.name,
@@ -26,6 +34,31 @@ const jsonLd = {
   worksFor: { '@type': 'Organization', name: site.company, url: site.companyUrl },
   sameAs,
 };
+
+const website = {
+  '@type': 'WebSite',
+  '@id': `${site.url}/#website`,
+  url: `${site.url}/`,
+  name: site.name,
+  description: site.tagline,
+  inLanguage: site.lang,
+  publisher: { '@id': `${site.url}/#person` },
+};
+
+const graph: object[] = [person, website];
+
+if (breadcrumb) {
+  const here = new URL(Astro.url.pathname, site.url).href;
+  graph.push({
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Accueil', item: `${site.url}/` },
+      { '@type': 'ListItem', position: 2, name: breadcrumb, item: here },
+    ],
+  });
+}
+
+const jsonLd = { '@context': 'https://schema.org', '@graph': graph };
 ---
 
 <script type="application/ld+json" is:inline set:html={JSON.stringify(jsonLd)} />

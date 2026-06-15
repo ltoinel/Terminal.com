@@ -4,6 +4,7 @@ import ThemeToggle from '../components/ThemeToggle.astro';
 import FullscreenButton from '../components/FullscreenButton.astro';
 import NewShellButton from '../components/NewShellButton.astro';
 import Terminal from '../components/Terminal.astro';
+import { site } from '../site.config.ts';
 ---
 
 <Layout>
@@ -14,4 +15,16 @@ import Terminal from '../components/Terminal.astro';
   </div>
 
   <Terminal />
+
+  {/* Always-rendered, crawlable identity for the home page: the terminal is the
+      only visible content and it boots client-side, so without this the `/`
+      document carries no real topical text or <h1> for engines. Visually hidden. */}
+  <section class="sr-only" aria-label="Présentation">
+    <h1>{site.name} — {site.role} @ {site.company}</h1>
+    <p>{site.bio}</p>
+    <h2>Domaines d'expertise</h2>
+    <ul>
+      {site.knowsAbout.map((k) => <li>{k}</li>)}
+    </ul>
+  </section>
 </Layout>

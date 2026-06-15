@@ -32,9 +32,9 @@ export const site = {
   birthPlace: 'Rennes',
   /** Short tagline — meta description / Open Graph default. */
   tagline:
-    'Architecte Fullstack & Innovation chez Capgemini. Blogueur, hacker, photographe, pilote de drones, voyageur et musicien.',
+    'Architecte Fullstack & Innovation chez Capgemini. Blogueur tech, hacker éthique, photographe, pilote de drone FPV, vanexplorateur et musicien.',
   /** Long bio — used as the schema.org Person `description`. */
-  bio: "Passionné de technologie depuis toujours, je conçois et fais évoluer des plateformes fullstack et explore l'innovation au quotidien en tant qu'architecte chez Capgemini. En dehors du travail, je partage mes découvertes sur mon blog Geeek.org, je bricole et code des projets open source, je pratique le hacking éthique, la photographie et le pilotage de drones FPV. J'aime aussi prendre la route : Apollovan raconte mes voyages en van aménagé. Et quand je débranche, je fais de la musique.",
+  bio: "Architecte Fullstack et Innovation chez Capgemini, je suis spécialisé dans la conception de plateformes logicielles et l'exploration des technologies émergentes. Fondateur du blog Geeek.org, je contribue activement à des projets open source et m'intéresse de près à la cybersécurité et au hacking éthique. Polyvalent et curieux, je partage également mes passions pour la photographie, les drones FPV et les voyages en van à travers le projet Apollovan, sans oublier la création musicale.",
   knowsAbout: [
     'Architecture logicielle',
     'Développement Fullstack',
@@ -43,6 +43,9 @@ export const site = {
     'Nouvelles technologies',
     'Photographie',
     'Drones FPV',
+    'Intelligence Artificielle générative',
+    'OSINT',
+    'Web'
   ],
 
   /* ----------------------------- site & SEO --------------------------- */
@@ -73,6 +76,7 @@ export const site = {
   // Each entry can feed the `open` command, the schema.org `sameAs`, or both.
   links: [
     { url: 'https://www.geeek.org', open: 'blog', sameAs: true},
+    { url: 'https://apollovan.fr', open: 'apollovan', sameAs: true },
     { url: 'https://github.com/ltoinel', open: 'github', sameAs: true },
     { url: 'https://www.linkedin.com/in/ltoinel', open: 'linkedin', sameAs: true },
     { url: 'https://www.facebook.com/ltoinel', open: 'facebook', sameAs: true },
@@ -80,9 +84,12 @@ export const site = {
     { url: 'https://app.hackthebox.com/profile/290482', open: 'htb', sameAs: true},
     { url: 'https://x.com/ltoinel', open: "x", sameAs: true },
     { url: 'https://unsplash.com/fr/@ltoinel', open: 'photographie', sameAs: true },
-    { url: 'https://apollovan.fr', open: 'apollovan', sameAs: true },
-    { url: 'https://www.geeek.org/fermeture-du-site-wiki-fpv/', open: 'drones-fpv' },
-    { url: 'https://tekkit.io/actu/portraits/ludovic7777', sameAs: true },
+    { url: 'https://www.geeek.org/tag/drones/', open: 'drones-fpv' },
+    { url: 'https://tekkit.io/actu/portraits/ludovic7777', open: 'tekkit', sameAs: true },
+    { url: 'https://www.youtube.com/@LudovicToinel', open: 'youtube', sameAs: true },
+    { url: 'https://www.instagram.com/ltoinel', open: 'instagram', sameAs: true },
+    { url: 'https://www.twitch.tv/ltoinel', open: 'twitch', sameAs: true },
+    { url: 'https://ko-fi.com/ltoinel', open: 'kofi', sameAs: true }
   ] as SiteLink[],
 };
 

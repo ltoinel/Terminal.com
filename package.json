@@ -24,7 +24,6 @@
     "upgrade:apply": "ncu -u && npm install && npm run build"
   },
   "dependencies": {
-    "@astrojs/sitemap": "^3.4.0",
     "@iconify-json/lucide": "^1.2.0",
     "@tailwindcss/vite": "^4.1.0",
     "astro": "^5.8.0",

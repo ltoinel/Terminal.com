@@ -1,0 +1,12 @@
+/* TEAM */
+  Nom: Ludovic Toinel
+  Rôle: Architecte Fullstack & Innovation @ Capgemini
+  Site: https://ludovic.toinel.com
+  Blog: https://www.geeek.org
+  GitHub: @ltoinel
+  Localisation: France
+
+/* SITE */
+  Standards: HTML5, CSS3, JavaScript, JSON-LD
+  Composants: Astro, Tailwind CSS
+  Logiciel: Visual Studio Code, Claude Code

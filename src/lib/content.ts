@@ -13,6 +13,7 @@
 
 import { validateCommands } from './commands.ts';
 import type { CmdDef } from './commands.ts';
+import { site } from '../site.config.ts';
 
 export type { CmdDef };
 
@@ -80,8 +81,17 @@ export const commandDefs: CmdDef[] = (() => {
 })();
 
 /** Home documents (`~`) eligible for a landing page: the `.md` files in HOME. */
-const homeDir =
-  tree.children.home?.type === 'dir' ? tree.children.home.children.ludovic : undefined;
+// Resolve HOME from the configured path (e.g. `/home/guest`) instead of a
+// hardcoded name, so renaming the home dir can't silently drop these pages.
+const homeNode = site.shell.home
+  .replace(/^\/+|\/+$/g, '')
+  .split('/')
+  .reduce<VNode | undefined>(
+    (node, seg) =>
+      node && node.type === 'dir' ? node.children[seg] : undefined,
+    tree as VNode,
+  );
+const homeDir = homeNode?.type === 'dir' ? homeNode : undefined;
 const homeDocs: { name: string; content: string }[] =
   homeDir?.type === 'dir'
     ? Object.entries(homeDir.children)
@@ -116,7 +126,16 @@ function metaFromMarkdown(md: string, slug: string): { title: string; desc: stri
 
 const escapeHtml = (s: string): string =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-const inlineMd = (s: string): string => escapeHtml(s).replace(/`([^`]+)`/g, '<code>$1</code>');
+
+// Inline markdown -> HTML, applied to already-escaped text. Links first so a `*`
+// or backtick inside a URL can't be mistaken for emphasis/code; then code, then
+// bold before italic (so `**x**` isn't eaten by the single-`*` rule).
+const inlineMd = (s: string): string =>
+  escapeHtml(s)
+    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2" rel="noopener">$1</a>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>');
 
 /**
  * Render a command's `man` markdown to semantic HTML for server-side SEO: ATX
@@ -127,23 +146,37 @@ const inlineMd = (s: string): string => escapeHtml(s).replace(/`([^`]+)`/g, '<co
 export function manToHtml(md: string, isLinkable: (name: string) => boolean = () => false): string {
   let html = '';
   let para: string[] = [];
+  let list: string[] = [];
   let inSeeAlso = false;
-  const flush = () => {
+  const flushPara = () => {
     if (para.length) {
       const joined = para.join(' ');
       // In "SEE ALSO", turn each command name that owns a page into a link to it.
       const inner = inSeeAlso
         ? escapeHtml(joined).replace(/[\w-]+/g, (tok) =>
-            isLinkable(tok) ? `<a href="/${tok}">${tok}</a>` : tok,
+            isLinkable(tok) ? `<a href="/${tok}/">${tok}</a>` : tok,
           )
         : inlineMd(joined);
       html += `<p>${inner}</p>`;
       para = [];
     }
   };
-  for (const line of md.split('\n')) {
+  const flushList = () => {
+    if (list.length) {
+      html += `<ul>${list.map((i) => `<li>${inlineMd(i)}</li>`).join('')}</ul>`;
+      list = [];
+    }
+  };
+  const flush = () => {
+    flushPara();
+    flushList();
+  };
+  for (const raw of md.split('\n')) {
+    const line = raw.trim();
     const h2 = line.match(/^##\s+(.*)$/);
     const h1 = line.match(/^#\s+(.*)$/);
+    const li = line.match(/^[-*]\s+(.*)$/);
+    const bq = line.match(/^>\s?(.*)$/);
     if (h2) {
       flush();
       inSeeAlso = h2[1].trim() === 'SEE ALSO';
@@ -152,11 +185,19 @@ export function manToHtml(md: string, isLinkable: (name: string) => boolean = ()
       flush();
       inSeeAlso = false;
       html += `<h1>${inlineMd(h1[1])}</h1>`;
-    } else if (line.trim() === '') {
+    } else if (li) {
+      flushPara();
+      list.push(li[1]); // open / extend a list
+    } else if (bq) {
       flush();
-      inSeeAlso = false; // a blank line ends the section
+      html += `<blockquote><p>${inlineMd(bq[1])}</p></blockquote>`;
+    } else if (line === '') {
+      flush();
+      inSeeAlso = false; // a blank line ends the block
+    } else if (list.length) {
+      list[list.length - 1] += ` ${line}`; // wrapped continuation of a list item
     } else {
-      para.push(line.trim());
+      para.push(line);
     }
   }
   flush();
@@ -212,6 +253,11 @@ export interface Route {
   title: string;
   /** Page meta description. */
   desc: string;
+  /**
+   * Server-rendered, crawlable HTML for home documents (markdown). Commands have
+   * no `body` — their crawlable mirror is derived from the `man` page instead.
+   */
+  body?: string;
 }
 
 /** Deep-linkable routes: content commands + home documents (one page each). */
@@ -221,6 +267,6 @@ export const routes: Route[] = [
     .map((c) => ({ slug: c.name, title: c.name, desc: c.desc || `commande ${c.name}` })),
   ...homeDocs.map(({ name, content }) => {
     const slug = name.replace(/\.md$/, '');
-    return { slug, ...metaFromMarkdown(content, slug) };
+    return { slug, ...metaFromMarkdown(content, slug), body: manToHtml(content) };
   }),
 ];

@@ -18,12 +18,15 @@ export function getStaticPaths() {
   const linkable = new Set(routes.map((r) => r.slug));
   return routes.map((r) => {
     const man = manByName.get(r.slug) || '';
+    // Commands derive their crawlable mirror from the man page; home documents
+    // (no man) carry their markdown already rendered to HTML in `r.body`.
+    const manHtml = man ? manToHtml(man, (n) => linkable.has(n)) : r.body || '';
     return {
       params: { command: r.slug },
       props: {
         label: r.title,
         desc: r.desc,
-        manHtml: man ? manToHtml(man, (n) => linkable.has(n)) : '',
+        manHtml,
         manDesc: man ? manMetaDescription(man) : '',
       },
     };
@@ -51,7 +54,7 @@ const fallback = desc.length + suffix.length <= 160 ? `${desc}${suffix}` : desc;
 const description = manDesc || fallback;
 ---
 
-<Layout title={title} description={description}>
+<Layout title={title} description={description} breadcrumb={label}>
   <div class="fixed right-3 top-3 z-[9000] flex gap-2 sm:right-5 sm:top-5">
     <NewShellButton />
     <ThemeToggle />
