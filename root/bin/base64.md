@@ -27,7 +27,8 @@ man: |
 js: |
   // `-d` / `--decode` flips to decoding; everything else is the payload.
   const decode = ctx.args[0] === '-d' || ctx.args[0] === '--decode';
-  const input = (decode ? ctx.args.slice(1) : ctx.args).join(' ');
+  // The payload comes from the arguments, or from piped stdin (`… | base64`).
+  const input = (decode ? ctx.args.slice(1) : ctx.args).join(' ') || ctx.stdin || '';
   if (!input) { ctx.error('usage: base64 [-d] <text>'); return; }
   try {
     if (decode) {

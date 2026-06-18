@@ -16,6 +16,9 @@
  */
 
 import { THEMES, applyTheme, currentTheme } from './themes';
+import { createVfs, vdir, type VDir } from './vfs';
+import { raiseZ, nextCascadeOffset, makeWindowChrome, spawnIframe } from './windows';
+import { parseCommandLine, type Stage } from './shell-parse';
 
 /** Configuration injected via `#shell-cfg`. */
 interface Cfg {
@@ -89,16 +92,6 @@ function playBell(): void {
 const preloaded: Record<string, string | undefined> = {};
 
 /**
- * Highest window z-index handed out so far — bumped to raise a window to front.
- * Capped well under the CRT overlay (`.fx-overlay`, z 9999) and the page chrome,
- * so windows always stay below them however many times one is clicked.
- */
-let topZ = 40;
-const raiseZ = (): number => (topZ = Math.min(topZ + 1, 900));
-/** How many extra shell windows have been spawned — used to cascade their position. */
-let spawnCount = 0;
-
-/**
  * Reads and parses shell data by id: a value preloaded from an external JSON
  * file (the large `shell-fs` / `shell-commands`), or, failing that, an inline
  * `<script type="application/json" id="...">` block (the tiny `shell-cfg`).
@@ -159,8 +152,7 @@ export function spawnTerminal(): void {
 
   // Cascade each new window down-right from the centered default, and bring it
   // to the front.
-  spawnCount += 1;
-  const off = 24 * (((spawnCount - 1) % 6) + 1);
+  const off = nextCascadeOffset();
   win.style.left = `calc(50% + ${off}px)`;
   win.style.top = `calc(50% + ${off}px)`;
   win.style.zIndex = String(raiseZ());
@@ -255,16 +247,8 @@ export function initTerminal(
   const typed = typed0;
   const promptEl = prompt0;
   const body = body0;
-  const bar = bar0;
-
-  // Clicking anywhere in a window raises it above the others (cascade focus).
-  win.addEventListener(
-    'pointerdown',
-    () => {
-      win.style.zIndex = String(raiseZ());
-    },
-    true,
-  );
+  // (Window chrome — drag, raise-to-front, controls — is wired by the shared
+  // `makeWindowChrome` near the end of this function.)
 
   const cfg = readJSON<Cfg>('shell-cfg', {
     host: 'localhost',
@@ -278,336 +262,11 @@ export function initTerminal(
 
   /* --------------------------- virtual fs --------------------------- */
 
-  /** A node in the fake Linux tree: a directory (children) or a text file. */
-  type VFile = { type: 'file'; content: string };
-  type VDir = { type: 'dir'; children: Record<string, VNode> };
-  type VNode = VFile | VDir;
-  const vdir = (children: Record<string, VNode> = {}): VDir => ({ type: 'dir', children });
-
-  /** Absolute path of the visitor's home directory (the shell starts here). */
-  const HOME = cfg.home;
-  /** Superuser home, reachable only after `su` (see the identity state below). */
-  const ROOT_HOME = '/root';
-
   // The whole fake filesystem mirrors the on-disk `root/` tree, built at compile
   // time and injected as #shell-fs (commands under /bin, documents under HOME).
-  const root = readJSON<VDir>('shell-fs', vdir());
-
-  /** Current and previous working directories (absolute, normalized). */
-  let cwd = HOME;
-  let prevCwd = HOME;
-
-  // Identity: `su` pushes the current identity, becomes root and jumps to /root;
-  // `exit` pops back. `home` is the current user's `~` (HOME, or ROOT_HOME as root).
-  let isRoot = false;
-  let home = HOME;
-  const idStack: { isRoot: boolean; home: string; cwd: string; prevCwd: string }[] = [];
-
-  /** Becomes root (`su` / `su root`); other users are rejected. */
-  function su(target?: string): string | null {
-    const name = (target ?? 'root').trim() || 'root';
-    if (name !== 'root') return `su: l'utilisateur « ${name} » n'existe pas`;
-    if (isRoot) return null; // already root — no-op
-    idStack.push({ isRoot, home, cwd, prevCwd });
-    isRoot = true;
-    home = ROOT_HOME;
-    prevCwd = cwd;
-    cwd = ROOT_HOME;
-    return null;
-  }
-
-  /** Restores the previous identity (used by `exit`); false at the top level. */
-  function popIdentity(): boolean {
-    const prev = idStack.pop();
-    if (!prev) return false;
-    ({ isRoot, home, cwd, prevCwd } = prev);
-    return true;
-  }
-
-  /** A `/root`-subtree path the current user may not access (root-only). */
-  function denied(path: string): boolean {
-    return !isRoot && (path === ROOT_HOME || path.startsWith(ROOT_HOME + '/'));
-  }
-
-  /**
-   * Write access (create / modify / remove): root may write anywhere, while the
-   * guest is confined to its own home (`/home/guest`) and everything below it.
-   */
-  function canWrite(path: string): boolean {
-    return isRoot || path === HOME || path.startsWith(HOME + '/');
-  }
-
-  /** Splits an absolute path into its non-empty segments. */
-  const segs = (p: string): string[] => p.split('/').filter(Boolean);
-
-  /** Resolves a typed path (relative, absolute, `~`, `.`, `..`) to an absolute one. */
-  function resolvePath(input: string): string {
-    let p = (input ?? '').trim();
-    if (p === '') return cwd;
-    if (p === '~') return home;
-    if (p.startsWith('~/')) p = home + p.slice(1);
-    const acc = p.startsWith('/') ? [] : segs(cwd);
-    for (const s of segs(p)) {
-      if (s === '.') continue;
-      else if (s === '..') acc.pop();
-      else acc.push(s);
-    }
-    return '/' + acc.join('/');
-  }
-
-  /** Returns the node at an absolute path, or `undefined` if it doesn't exist. */
-  function nodeAt(path: string): VNode | undefined {
-    if (path === '/') return root;
-    let cur: VNode = root;
-    for (const s of segs(path)) {
-      if (cur.type !== 'dir') return undefined;
-      const next: VNode | undefined = cur.children[s];
-      if (!next) return undefined;
-      cur = next;
-    }
-    return cur;
-  }
-
-  /** Prompt-friendly label: the current home shows as `~`, paths below it as `~/sub`. */
-  function pathLabel(path: string): string {
-    if (path === home) return '~';
-    if (path.startsWith(home + '/')) return '~' + path.slice(home.length);
-    return path;
-  }
-
-  /** Names of the entries in the current directory, optionally filtered by type. */
-  function entryNames(kind: 'all' | 'dir' | 'file'): string[] {
-    const n = nodeAt(cwd);
-    if (n?.type !== 'dir') return [];
-    return Object.keys(n.children).filter(
-      (name) => kind === 'all' || n.children[name].type === kind,
-    );
-  }
-
-  /** `ls` backend: lists a directory (or a single file), or returns an error. */
-  function listPath(arg?: string): {
-    entries?: { name: string; type: 'dir' | 'file'; size: number }[];
-    error?: string;
-  } {
-    const path = resolvePath(arg ?? '');
-    if (denied(path)) return { error: `cannot open directory '${arg ?? path}': Permission denied` };
-    const n = nodeAt(path);
-    if (!n) return { error: `cannot access '${arg}': No such file or directory` };
-    if (n.type === 'file')
-      return {
-        entries: [{ name: path.split('/').pop() || path, type: 'file', size: n.content.length }],
-      };
-    const entries = Object.keys(n.children)
-      .sort((a, b) => a.localeCompare(b))
-      .map((name) => {
-        const c = n.children[name];
-        return { name, type: c.type, size: c.type === 'file' ? c.content.length : 4096 };
-      });
-    return { entries };
-  }
-
-  /** `cat` backend: reads a file (with implicit `.md`), or returns an error. */
-  function readPath(arg: string): { content?: string; name?: string; error?: string } {
-    let path = resolvePath(arg);
-    if (denied(path)) return { error: 'Permission denied' };
-    let n = nodeAt(path);
-    if (!n) {
-      // Retry with implicit `.md`, or a name without its extension, in the parent dir.
-      const parent = path.slice(0, path.lastIndexOf('/')) || '/';
-      const base = path.split('/').pop() || '';
-      const pd = nodeAt(parent);
-      if (pd?.type === 'dir') {
-        const join = (f: string) => (parent === '/' ? '' : parent) + '/' + f;
-        if (pd.children[`${base}.md`]?.type === 'file') {
-          path = join(`${base}.md`);
-          n = pd.children[`${base}.md`];
-        } else {
-          const hit = Object.keys(pd.children).find(
-            (f) => pd.children[f].type === 'file' && f.replace(/\.[^.]+$/, '') === base,
-          );
-          if (hit) {
-            path = join(hit);
-            n = pd.children[hit];
-          }
-        }
-      }
-    }
-    if (!n) return { error: 'No such file or directory' };
-    if (n.type === 'dir') return { error: 'Is a directory' };
-    return { content: n.content, name: path.split('/').pop() };
-  }
-
-  /** Changes directory (`-` = previous, empty = home); error string or `null`. */
-  function chdir(arg?: string): string | null {
-    const target =
-      arg === undefined || arg === '' ? home : arg === '-' ? prevCwd : resolvePath(arg);
-    if (denied(target)) return `cd: ${arg}: Permission denied`;
-    const n = nodeAt(target);
-    if (!n) return `cd: ${arg}: No such file or directory`;
-    if (n.type !== 'dir') return `cd: ${arg}: Not a directory`;
-    prevCwd = cwd;
-    cwd = target;
-    return null;
-  }
-
-  /* ----------------------- filesystem mutations --------------------- */
-  // `touch` / `mkdir` / `rm` mutate the in-memory tree. Changes are persisted as
-  // a journal of operations in localStorage and replayed onto the freshly-loaded
-  // base tree at each boot — so a deploy still refreshes /bin, documents, etc.,
-  // *under* the user's local changes (rather than freezing a whole stale tree).
-  const FS_KEY = 'ltsh.fs';
-  interface FsOp {
-    op: 'mkdir' | 'touch' | 'rm' | 'write';
-    path: string; // absolute & normalized, so replay is independent of cwd
-    p?: boolean; // mkdir -p
-    r?: boolean; // rm -r
-    content?: string; // write: the file's full contents
-  }
-  type MutRes = { error?: string; changed?: boolean };
-
-  const splitPath = (abs: string): { parent: string; base: string } => ({
-    parent: abs.slice(0, abs.lastIndexOf('/')) || '/',
-    base: abs.split('/').pop() || '',
-  });
-
-  /** Creates a directory (with `-p`, creating intermediate dirs as needed). */
-  function vfsMkdir(abs: string, disp: string, parents: boolean): MutRes {
-    const parts = segs(abs);
-    if (!parts.length) return { error: `cannot create directory '${disp}': File exists` };
-    let dir: VNode = root;
-    let changed = false;
-    for (let i = 0; i < parts.length; i++) {
-      if (dir.type !== 'dir')
-        return { error: `cannot create directory '${disp}': Not a directory` };
-      const seg = parts[i];
-      const last = i === parts.length - 1;
-      const child: VNode | undefined = dir.children[seg];
-      if (child) {
-        if (last && !parents) return { error: `cannot create directory '${disp}': File exists` };
-        if (child.type !== 'dir')
-          return { error: `cannot create directory '${disp}': Not a directory` };
-        dir = child;
-      } else {
-        if (!last && !parents)
-          return { error: `cannot create directory '${disp}': No such file or directory` };
-        const made: VDir = { type: 'dir', children: {} };
-        dir.children[seg] = made;
-        dir = made;
-        changed = true;
-      }
-    }
-    return { changed };
-  }
-
-  /** Creates an empty file; a no-op if the path already exists (like real touch). */
-  function vfsTouch(abs: string, disp: string): MutRes {
-    if (nodeAt(abs)) return { changed: false };
-    const { parent, base } = splitPath(abs);
-    const p = nodeAt(parent);
-    if (!p || p.type !== 'dir')
-      return { error: `cannot touch '${disp}': No such file or directory` };
-    p.children[base] = { type: 'file', content: '' };
-    return { changed: true };
-  }
-
-  /** Writes a file's full contents, creating it or overwriting an existing file
-   * (the parent directory must already exist; a directory target is refused). */
-  function vfsWrite(abs: string, disp: string, content: string): MutRes {
-    const existing = nodeAt(abs);
-    if (existing) {
-      if (existing.type === 'dir') return { error: `cannot write '${disp}': Is a directory` };
-      if (existing.content === content) return { changed: false }; // no-op: identical
-      existing.content = content;
-      return { changed: true };
-    }
-    const { parent, base } = splitPath(abs);
-    const p = nodeAt(parent);
-    if (!p || p.type !== 'dir')
-      return { error: `cannot write '${disp}': No such file or directory` };
-    p.children[base] = { type: 'file', content };
-    return { changed: true };
-  }
-
-  /** Removes a file, or a directory with `-r`. `-f` ignores a missing target. */
-  function vfsRm(abs: string, disp: string, recursive: boolean, force: boolean): MutRes {
-    const node = nodeAt(abs);
-    if (!node)
-      return force
-        ? { changed: false }
-        : { error: `cannot remove '${disp}': No such file or directory` };
-    if (abs === '/' || cwd === abs || cwd.startsWith(`${abs}/`))
-      return { error: `cannot remove '${disp}': directory in use` };
-    if (node.type === 'dir' && !recursive)
-      return { error: `cannot remove '${disp}': Is a directory` };
-    const { parent, base } = splitPath(abs);
-    const p = nodeAt(parent);
-    if (p?.type !== 'dir') return { error: `cannot remove '${disp}': No such file or directory` };
-    delete p.children[base];
-    return { changed: true };
-  }
-
-  let fsJournal: FsOp[] = [];
-  const saveJournal = (): void => {
-    try {
-      localStorage.setItem(FS_KEY, JSON.stringify(fsJournal));
-    } catch {
-      /* storage full / unavailable — the change still applies this session */
-    }
-  };
-
-  /** Runs a mutation, records it in the journal on success, returns an error or null. */
-  function fsMutate(
-    op: FsOp['op'],
-    rawPath: string,
-    flags: { p?: boolean; r?: boolean; f?: boolean; content?: string },
-  ): string | null {
-    if (!rawPath) return 'missing operand';
-    const abs = resolvePath(rawPath);
-    // Read protection (root home) first, then the write-access policy.
-    if (denied(abs) || !canWrite(abs)) return `${rawPath}: Permission denied`;
-    const res =
-      op === 'mkdir'
-        ? vfsMkdir(abs, rawPath, !!flags.p)
-        : op === 'touch'
-          ? vfsTouch(abs, rawPath)
-          : op === 'write'
-            ? vfsWrite(abs, rawPath, flags.content ?? '')
-            : vfsRm(abs, rawPath, !!flags.r, !!flags.f);
-    if (res.error) return res.error;
-    if (res.changed) {
-      // A fresh write fully defines the file, so older writes to the same path are
-      // redundant — drop them so repeated saves don't grow the journal unbounded.
-      if (op === 'write')
-        fsJournal = fsJournal.filter((o) => !(o.op === 'write' && o.path === abs));
-      const entry: FsOp = { op, path: abs };
-      if (flags.p) entry.p = true;
-      if (flags.r) entry.r = true;
-      if (op === 'write') entry.content = flags.content ?? '';
-      fsJournal.push(entry);
-      saveJournal();
-    }
-    return null;
-  }
-
-  // Replay the persisted journal onto the base tree (rm is forced & idempotent).
-  try {
-    const stored: unknown = JSON.parse(localStorage.getItem(FS_KEY) || '[]');
-    if (Array.isArray(stored)) {
-      fsJournal = stored.filter(
-        (o): o is FsOp =>
-          !!o && ['mkdir', 'touch', 'rm', 'write'].includes(o.op) && typeof o.path === 'string',
-      );
-      for (const o of fsJournal) {
-        if (o.op === 'mkdir') vfsMkdir(o.path, o.path, !!o.p);
-        else if (o.op === 'touch') vfsTouch(o.path, o.path);
-        else if (o.op === 'write')
-          vfsWrite(o.path, o.path, typeof o.content === 'string' ? o.content : '');
-        else vfsRm(o.path, o.path, !!o.r, true);
-      }
-    }
-  } catch {
-    /* corrupt journal — start from the clean base tree */
-  }
+  // Path resolution, identity (`su` / `exit`) and persisted mutations all live
+  // in `vfs` (see ./vfs.ts), which is unit-tested on its own.
+  const vfs = createVfs({ root: readJSON<VDir>('shell-fs', vdir()), home: cfg.home });
 
   /* ----------------------------- prompt ----------------------------- */
 
@@ -615,13 +274,13 @@ export function initTerminal(
   function promptHtml(): string {
     // Always `user@host` (e.g. `guest@ludovic.toinel.com`); root swaps the name
     // and turns the `$` symbol into a red `#`.
-    const user = `${isRoot ? 'root' : cfg.user}@${cfg.host}`;
-    const sym = isRoot
+    const user = `${vfs.isRoot() ? 'root' : cfg.user}@${cfg.host}`;
+    const sym = vfs.isRoot()
       ? '<span class="prompt" style="color:#ff6b6b">#</span>'
       : '<span class="prompt">$</span>';
     // Trailing space is a non-breaking space: in the flex input line a normal
     // trailing space would be collapsed, leaving no gap after the symbol.
-    return `<span class="prompt-user">${escapeHtml(user)}</span><span class="comment">:</span><span class="prompt-path">${escapeHtml(pathLabel(cwd))}</span>${sym}&nbsp;`;
+    return `<span class="prompt-user">${escapeHtml(user)}</span><span class="comment">:</span><span class="prompt-path">${escapeHtml(vfs.cwdLabel())}</span>${sym}&nbsp;`;
   }
   /** Re-renders the static prompt element to match the current directory. */
   const refreshPrompt = (): void => {
@@ -675,6 +334,26 @@ export function initTerminal(
 
   /* ----------------------------- output ----------------------------- */
 
+  // When set, stdout is captured into this buffer instead of the screen — used
+  // by `>` / `>>` redirection and by `|` pipes (a stage's stdout becomes the
+  // next stage's `ctx.stdin`). `error` (stderr) is never captured. The captured
+  // text comes from `print` / `raw` / `line` and from any direct `append` (so a
+  // command that renders its own HTML, like `grep`, still pipes/redirects as
+  // plain text).
+  let captureBuf: string[] | null = null;
+  // Piped input handed to the running command via `ctx.stdin` (empty if none).
+  let currentStdin = '';
+
+  /**
+   * If stdout is being captured, records `text` (the command's own string, not
+   * its rendered HTML) and reports `true` so the caller skips painting it.
+   */
+  function captured(text: string): boolean {
+    if (!captureBuf) return false;
+    captureBuf.push(text);
+    return true;
+  }
+
   /** Scrolls the terminal to the bottom. */
   const scrollEnd = () => (body.scrollTop = body.scrollHeight);
 
@@ -683,6 +362,12 @@ export function initTerminal(
     const d = document.createElement('div');
     if (cls) d.className = cls;
     d.innerHTML = html;
+    // While capturing (redirect / pipe), keep the node off-screen and record its
+    // text so commands that emit HTML directly still produce pipeable stdout.
+    if (captureBuf) {
+      captureBuf.push(d.textContent || '');
+      return d;
+    }
     output.appendChild(d);
     scrollEnd();
     return d;
@@ -690,12 +375,14 @@ export function initTerminal(
 
   /** Prints a formatted document (markdown -> HTML) with a fade-in. */
   function printBlock(text: string): void {
+    if (captured(text)) return;
     const d = append(format(text), 'ssh-out reveal-line');
     requestAnimationFrame(() => d.classList.add('is-in'));
   }
 
   /** Prints raw, escaped text (no markdown) preserving whitespace — for plain files. */
   function printRaw(text: string): void {
+    if (captured(text)) return;
     const d = append(
       `<div class="ln out">${escapeHtml(text.replace(/\s+$/, ''))}</div>`,
       'ssh-out reveal-line',
@@ -705,6 +392,7 @@ export function initTerminal(
 
   /** Prints a single line (inline markup allowed). */
   function printLine(text: string): void {
+    if (captured(text)) return;
     append(`<div class="ln out">${inline(text)}</div>`, 'reveal-line is-in');
   }
 
@@ -768,11 +456,11 @@ export function initTerminal(
   }
 
   /** Files (sorted) in the current directory — what `help` and completion show. */
-  const fileList = (): string[] => entryNames('file').sort();
+  const fileList = (): string[] => vfs.entryNames('file').sort();
 
   /** Resolves a name in the current dir: exact, implicit `.md`, or without extension. */
   function resolveFile(name: string): string | undefined {
-    const n = nodeAt(cwd);
+    const n = vfs.nodeAt(vfs.cwd());
     if (n?.type !== 'dir') return undefined;
     const ch = n.children;
     if (ch[name]?.type === 'file') return name;
@@ -807,6 +495,8 @@ export function initTerminal(
       args,
       body,
       cfg,
+      // Text piped in from a previous pipeline stage (`prev | cmd`); '' if none.
+      stdin: currentStdin,
       history: cmdHistory,
       commands: cmdDefs.map((d) => ({
         name: d.name,
@@ -818,19 +508,19 @@ export function initTerminal(
       fileList,
       resolveFile,
       // Virtual filesystem, exposed to the `cd` / `ls` / `cat` / `pwd` commands.
-      cwd: () => cwd,
-      cwdLabel: () => pathLabel(cwd),
-      cd: (arg?: string) => chdir(arg),
-      list: (arg?: string) => listPath(arg),
-      read: (arg: string) => readPath(arg),
+      cwd: () => vfs.cwd(),
+      cwdLabel: () => vfs.cwdLabel(),
+      cd: (arg?: string) => vfs.chdir(arg),
+      list: (arg?: string) => vfs.listPath(arg),
+      read: (arg: string) => vfs.readPath(arg),
       // Mutations (persisted to localStorage): `mkdir` / `touch` / `rm`. Each
       // returns an error string, or null on success.
-      mkdir: (path: string, parents = false) => fsMutate('mkdir', path, { p: parents }),
-      touch: (path: string) => fsMutate('touch', path, {}),
+      mkdir: (path: string, parents = false) => vfs.mutate('mkdir', path, { p: parents }),
+      touch: (path: string) => vfs.mutate('touch', path, {}),
       // Writes (or overwrites) a file's full contents — persisted like mkdir/touch.
-      write: (path: string, content: string) => fsMutate('write', path, { content }),
+      write: (path: string, content: string) => vfs.mutate('write', path, { content }),
       rm: (path: string, recursive = false, force = false) =>
-        fsMutate('rm', path, { r: recursive, f: force }),
+        vfs.mutate('rm', path, { r: recursive, f: force }),
       print: (md: string) => printBlock(md),
       raw: (text: string) => printRaw(text),
       line: (text: string) => printLine(text),
@@ -843,19 +533,22 @@ export function initTerminal(
         output.innerHTML = '';
       },
       open: (url: string) => window.open(url, '_blank', 'noopener'),
+      // Opens an in-page window framing `url` (the `iframed` command); returns
+      // an error string for a bad URL, or null on success.
+      iframe: (url: string) => spawnIframe(url),
       // Display themes (CRT phosphor palettes). `theme` applies one (green clears
       // the attribute); `themes`/`currentTheme` let the `theme` command list and cycle.
       theme: (name: string) => applyTheme(name),
       themes: THEMES,
       currentTheme: () => currentTheme(),
-      su: (target?: string) => su(target),
+      su: (target?: string) => vfs.su(target),
       // Interactive prompt: shows `question`, resolves with the user's typed line.
       // Pass `{ secret: true }` to mask the input (password-style read).
       ask: (question: string, opts?: { secret?: boolean }) =>
         readLine(question, !!(opts && opts.secret)),
       // `exit` from an `su` shell returns to the previous user; at the top level it closes.
       exit: () => {
-        if (!popIdentity()) closeWin();
+        if (!vfs.popIdentity()) closeWin();
       },
       exec: (name: string, a: string[] = []) => commands[name]?.run(a),
       // Aborts when the user presses Ctrl+C during a long command (fetch, loops).
@@ -908,25 +601,67 @@ export function initTerminal(
       /* storage full / unavailable — keep going */
     }
 
-    const parts = line.split(/\s+/);
-    const name = parts[0];
-    const args = parts.slice(1);
-    const cmd = commands[name];
+    // Parse the line into pipeline stages + an optional trailing redirection
+    // (the pure syntax layer lives in ./shell-parse). Each stage's stdout feeds
+    // the next stage's `ctx.stdin`; the last stage prints to screen (or to the
+    // redirect file). Stderr always shows on screen.
+    const { stages, redirect, error } = parseCommandLine(line);
+    if (error) {
+      printErr(error);
+      return;
+    }
+
+    /** Runs one stage; returns its captured stdout, or null when not captured. */
+    const runStage = async (stage: Stage, capture: boolean): Promise<string[] | null> => {
+      const cmd = commands[stage.name];
+      const buf = capture ? [] : null;
+      captureBuf = buf;
+      try {
+        if (cmd) {
+          await cmd.run(stage.args);
+        } else {
+          // Not a command: try the path as a file (implicit `cat`) in the current dir.
+          const res = vfs.readPath(stage.name);
+          if (res.error) printErr(`${stage.name}: command not found — type \`help\``);
+          else if ((res.name || '').endsWith('.md')) printBlock(res.content as string);
+          else printRaw(res.content as string);
+        }
+      } finally {
+        captureBuf = null;
+      }
+      return buf;
+    };
+
     // Fresh abort handle per command, exposed to its `js` via `ctx.signal` and
     // triggered by Ctrl+C (see the keydown handler).
     currentAbort = new AbortController();
+    let lastBuf: string[] | null = null;
+    currentStdin = ''; // first stage has no stdin
     try {
-      if (cmd) {
-        await cmd.run(args);
-      } else {
-        // Not a command: try the path as a file (implicit `cat`) in the current dir.
-        const res = readPath(name);
-        if (res.error) printErr(`${name}: command not found — type \`help\``);
-        else if ((res.name || '').endsWith('.md')) printBlock(res.content as string);
-        else printRaw(res.content as string);
+      for (let i = 0; i < stages.length; i++) {
+        const isLast = i === stages.length - 1;
+        // Capture every non-final stage (its output is piped onward), plus the
+        // final stage when its output is redirected to a file.
+        lastBuf = await runStage(stages[i], !isLast || !!redirect);
+        // The captured stdout becomes the next stage's stdin.
+        currentStdin = lastBuf ? lastBuf.join('\n') : '';
       }
     } finally {
+      captureBuf = null;
+      currentStdin = '';
       currentAbort = null;
+    }
+
+    if (redirect && lastBuf) {
+      // Each captured stdout block becomes a line; ensure a trailing newline.
+      let content = lastBuf.join('\n');
+      if (content && !content.endsWith('\n')) content += '\n';
+      if (redirect.append) {
+        const prev = vfs.readPath(redirect.path);
+        if (!prev.error) content = (prev.content ?? '') + content;
+      }
+      const err = vfs.mutate('write', redirect.path, { content });
+      if (err) printErr(err);
     }
   }
 
@@ -947,13 +682,21 @@ export function initTerminal(
       return;
     }
     const head = v.slice(0, v.length - frag.length).trim();
-    const first = head.split(/\s+/)[0];
     let pool: string[];
-    if (head === '') pool = [...Object.keys(commands), ...entryNames('all')];
-    else if (first === 'open') pool = Object.keys(cfg.links);
-    else if (first === 'cd') pool = entryNames('dir');
-    else if (first === 'cat' || first === 'ls') pool = entryNames('all');
-    else pool = [...Object.keys(commands), ...entryNames('all'), ...Object.keys(cfg.links)];
+    if (/>>?$/.test(head)) {
+      // Completing a redirection target (`… > frag`) — names in the current dir.
+      pool = vfs.entryNames('all');
+    } else {
+      // Scope to the current pipeline/redirection segment: the text after the
+      // last `|`, `>` or `>>` operator. Its first token is the command.
+      const seg = (head.split(/\||>>?/).pop() ?? '').trim();
+      const first = seg.split(/\s+/)[0];
+      if (seg === '') pool = [...Object.keys(commands), ...vfs.entryNames('all')];
+      else if (first === 'open') pool = Object.keys(cfg.links);
+      else if (first === 'cd') pool = vfs.entryNames('dir');
+      else if (first === 'cat' || first === 'ls') pool = vfs.entryNames('all');
+      else pool = [...Object.keys(commands), ...vfs.entryNames('all'), ...Object.keys(cfg.links)];
+    }
 
     const hits = [...new Set(pool)].filter((c) => c.startsWith(frag)).sort();
     if (hits.length === 1) {
@@ -1140,71 +883,6 @@ export function initTerminal(
 
   /* ------------------- window: drag, resize & controls -------------- */
 
-  /** Switches from centered (transform) positioning to absolute left/top. */
-  function toLeftTop(): void {
-    if (win.style.left && win.style.transform === 'none') return;
-    const r = win.getBoundingClientRect();
-    win.style.left = `${r.left}px`;
-    win.style.top = `${r.top}px`;
-    win.style.transform = 'none';
-    win.style.margin = '0';
-  }
-
-  /** Clamps (x, y) so a usable part of the title bar stays on screen. */
-  function clampToViewport(x: number, y: number): [number, number] {
-    return [
-      Math.min(Math.max(x, 56 - win.offsetWidth), window.innerWidth - 56),
-      Math.min(Math.max(y, 0), window.innerHeight - 40),
-    ];
-  }
-
-  // Drag the window by grabbing the title bar.
-  let drag: { dx: number; dy: number } | null = null;
-  bar.addEventListener('pointerdown', (e: PointerEvent) => {
-    if ((e.target as HTMLElement).closest('.ssh-ctl')) return;
-    if (win.classList.contains('maximized')) return;
-    toLeftTop();
-    const r = win.getBoundingClientRect();
-    drag = { dx: e.clientX - r.left, dy: e.clientY - r.top };
-    bar.setPointerCapture(e.pointerId);
-    bar.classList.add('grabbing');
-  });
-  bar.addEventListener('pointermove', (e: PointerEvent) => {
-    if (!drag) return;
-    const [x, y] = clampToViewport(e.clientX - drag.dx, e.clientY - drag.dy);
-    win.style.left = `${x}px`;
-    win.style.top = `${y}px`;
-  });
-  const endDrag = () => {
-    drag = null;
-    bar.classList.remove('grabbing');
-  };
-  bar.addEventListener('pointerup', endDrag);
-  bar.addEventListener('pointercancel', endDrag);
-
-  // Keep a moved window within the viewport when the browser is resized.
-  window.addEventListener('resize', () => {
-    if (!win.isConnected || win.classList.contains('maximized') || !win.style.left) return;
-    const [x, y] = clampToViewport(parseFloat(win.style.left), parseFloat(win.style.top));
-    win.style.left = `${x}px`;
-    win.style.top = `${y}px`;
-  });
-
-  /** Inline style saved before maximizing, for restoration. */
-  let prevRect = '';
-
-  /** Maximizes the window (full frame) or restores its previous position/size. */
-  function maximize(): void {
-    if (win.classList.contains('maximized')) {
-      win.classList.remove('maximized');
-      win.setAttribute('style', prevRect);
-    } else {
-      prevRect = win.getAttribute('style') || '';
-      win.removeAttribute('style'); // let the .maximized class control everything
-      win.classList.add('maximized');
-    }
-  }
-
   /**
    * "Closes" the window: the first window fades out and reveals its reconnect
    * button; a spawned window (no reconnect) fades out and removes itself.
@@ -1215,28 +893,15 @@ export function initTerminal(
     else setTimeout(() => win.remove(), reduce ? 0 : 260);
   }
 
-  // Title-bar buttons: close / minimize / maximize.
-  bar.querySelectorAll('.ssh-ctl').forEach((b) =>
-    b.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const act = (b as HTMLElement).dataset.act;
-      if (act === 'close') closeWin();
-      else if (act === 'min') win.classList.toggle('minimized');
-      else if (act === 'max') maximize();
-    }),
-  );
+  // Drag, raise-to-front, minimize / maximize and the title-bar buttons — the
+  // single window-chrome mechanism shared with stand-alone windows (`iframed`).
+  makeWindowChrome(win, closeWin);
 
   if (reconnect)
     reconnect.addEventListener('click', () => {
       win.classList.remove('minimized');
       boot();
     });
-
-  // Double-click the bar = maximize / restore.
-  bar.addEventListener('dblclick', (e) => {
-    if ((e.target as HTMLElement).closest('.ssh-ctl')) return;
-    maximize();
-  });
 
   boot();
 }

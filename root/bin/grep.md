@@ -49,12 +49,9 @@ js: |
     ctx.error('usage: grep [-inr] <pattern> <file...>');
     return;
   }
+  // File targets; when none are given we may instead read piped stdin (below).
   let targets = rest;
   if (!targets.length) targets = rec ? ['.'] : null;
-  if (!targets) {
-    ctx.error('grep: no file given (add -r to search recursively)');
-    return;
-  }
 
   // The pattern is a regex; fall back to a literal match if it doesn't compile.
   let re;
@@ -62,6 +59,37 @@ js: |
     re = new RegExp(pattern, ci ? 'gi' : 'g');
   } catch {
     re = new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), ci ? 'gi' : 'g');
+  }
+
+  // Emits one matching line: each match highlighted, with an optional `name:`
+  // (file) prefix and an optional line number.
+  const emit = (line, idx, name) => {
+    re.lastIndex = 0;
+    if (!re.test(line)) return;
+    let html = '';
+    let last = 0;
+    let m;
+    re.lastIndex = 0;
+    while ((m = re.exec(line)) !== null) {
+      html += E(line.slice(last, m.index)) + `<span class="accent text-glow">${E(m[0])}</span>`;
+      last = m.index + m[0].length;
+      if (m.index === re.lastIndex) re.lastIndex++; // avoid looping on empty matches
+    }
+    html += E(line.slice(last));
+    const prefix =
+      (name ? `<span class="prompt-path">${E(name)}</span><span class="comment">:</span>` : '') +
+      (num ? `<span class="comment">${idx + 1}:</span>` : '');
+    ctx.append(`<div class="ln">${prefix}${html}</div>`);
+  };
+
+  // No file given: read from piped stdin (`… | grep pattern`) when available.
+  if (!targets && ctx.stdin) {
+    ctx.stdin.split('\n').forEach((line, idx) => emit(line, idx, null));
+    return;
+  }
+  if (!targets) {
+    ctx.error('grep: no file given (add -r to search recursively)');
+    return;
   }
 
   // Resolve targets into a flat list of file paths (expanding dirs under -r).
@@ -94,24 +122,6 @@ js: |
   for (const p of paths) {
     const rd = ctx.read(p);
     if (rd.error) continue;
-    rd.content.split('\n').forEach((line, idx) => {
-      re.lastIndex = 0;
-      if (!re.test(line)) return;
-      // Rebuild the line with each match highlighted, escaping the segments.
-      let html = '';
-      let last = 0;
-      let m;
-      re.lastIndex = 0;
-      while ((m = re.exec(line)) !== null) {
-        html += E(line.slice(last, m.index)) + `<span class="accent text-glow">${E(m[0])}</span>`;
-        last = m.index + m[0].length;
-        if (m.index === re.lastIndex) re.lastIndex++; // avoid looping on empty matches
-      }
-      html += E(line.slice(last));
-      const prefix =
-        (showName ? `<span class="prompt-path">${E(p)}</span><span class="comment">:</span>` : '') +
-        (num ? `<span class="comment">${idx + 1}:</span>` : '');
-      ctx.append(`<div class="ln">${prefix}${html}</div>`);
-    });
+    rd.content.split('\n').forEach((line, idx) => emit(line, idx, showName ? p : null));
   }
 ---

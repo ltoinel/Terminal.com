@@ -26,39 +26,13 @@ js: |
   const art = (t) => `<div class="ln ascii-art"><span class="accent text-glow">${E(t)}</span></div>`;
   const narrow = typeof window !== 'undefined' && window.innerWidth < 680;
 
-  // "Lud'OS" banner (figlet bloody) — glitch/CRT look; requires .ascii-art.
-  const banner = [
-    '  ',
-    '  ',
-    ' ██▓     █    ██ ▓█████▄ ██▓ ▒█████    ██████',
-    '▓██▒     ██  ▓██▒▒██▀ ██▌▓█▒▒██▒  ██▒▒██    ▒',
-    '▒██░    ▓██  ▒██░░██   █▌░▓░▒██░  ██▒░ ▓██▄',
-    '▒██░    ▓▓█  ░██░░▓█▄   ▌ ▒ ▒██   ██░  ▒   ██▒',
-    '░██████▒▒▒█████▓ ░▒████▓  ░ ░ ████▓▒░▒██████▒▒',
-    '░ ▒░▓  ░░▒▓▒ ▒ ▒  ▒▒▓  ▒    ░ ▒░▒░▒░ ▒ ▒▓▒ ▒ ░',
-    '░ ░ ▒  ░░░▒░ ░ ░  ░ ▒  ▒      ░ ▒ ▒░ ░ ░▒  ░ ░',
-    '  ░ ░    ░░░ ░ ░  ░ ░  ░    ░ ░ ░ ▒  ░  ░  ░',
-    '    ░  ░   ░        ░           ░ ░        ░',
-    '                  ░',
-  ];
-  if (narrow) {
-    ctx.append(`<div class="ln ascii-art"><span class="accent text-glow">░▒▓ Lud'OS ▓▒░</span></div>`);
-  } else {
-    for (const l of banner) {
-      ctx.append(art(l));
-      await ctx.sleep(40);
-    }
-  }
-
-  ctx.line('');
-
   // systemd-style boot sequence.
   const ok = (msg) =>
     ctx.append(
       `<div class="ln"><span class="comment">[</span><span class="accent text-glow"> OK </span><span class="comment">] ${E(msg)}</span></div>`,
     );
   const steps = [
-    'Phosphor 1.0 kernel loaded',
+    'Lud\'OS 1.0 kernel loaded',
     `${ctx.commands.length} commands mounted on /bin`,
     'Encrypted LTS link established',
     'CRT theme calibrated · glow nominal',
