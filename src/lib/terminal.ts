@@ -125,7 +125,7 @@ export async function bootTerminal(): Promise<void> {
     load('/shell-fs.json', 'shell-fs'),
     load('/shell-commands.json', 'shell-commands'),
   ]);
-  initTerminal(document.getElementById('ssh'), document.getElementById('ssh-reconnect'));
+  initTerminal(document.getElementById('ssh'));
 }
 
 /**
@@ -158,7 +158,7 @@ export function spawnTerminal(): void {
   win.style.zIndex = String(raiseZ());
 
   document.body.appendChild(win);
-  initTerminal(win, null, false);
+  initTerminal(win, false);
 }
 
 /** Escapes the HTML-sensitive characters before injecting into the DOM. */
@@ -219,17 +219,11 @@ export function format(text: string): string {
 /**
  * Wires a single terminal window and starts its connection sequence. Elements
  * are queried *within* `win0` (by class), so several independent windows can
- * coexist on the page. `reconnect` is the companion "reconnect" button shown
- * when the window is closed; spawned windows pass `null` and are removed from
- * the DOM on close instead. `allowDeepLink` lets the first window open the URL's
+ * coexist on the page. `allowDeepLink` lets the first window open the URL's
  * command/document on load; spawned windows always play the full boot + motd.
  * No-op (early return) if `win0` (or any required child) is absent.
  */
-export function initTerminal(
-  win0: HTMLElement | null,
-  reconnect: HTMLElement | null = null,
-  allowDeepLink = true,
-): void {
+export function initTerminal(win0: HTMLElement | null, allowDeepLink = true): void {
   const output0 = win0?.querySelector<HTMLElement>('.ssh-output') ?? null;
   const inputline0 = win0?.querySelector<HTMLElement>('.ssh-inputline') ?? null;
   const input0 = win0?.querySelector<HTMLInputElement>('.ssh-input') ?? null;
@@ -854,7 +848,6 @@ export function initTerminal(
     busy = true;
     inputline.hidden = true;
     output.innerHTML = '';
-    if (reconnect) reconnect.hidden = true;
     win.classList.remove('closed');
 
     // A deep link (e.g. /whoami, reached from the sitemap or a search result)
@@ -884,24 +877,18 @@ export function initTerminal(
   /* ------------------- window: drag, resize & controls -------------- */
 
   /**
-   * "Closes" the window: the first window fades out and reveals its reconnect
-   * button; a spawned window (no reconnect) fades out and removes itself.
+   * "Closes" the window: it fades out. The main window (`#ssh`) stays in the DOM
+   * (hidden) so the dock's "+ shell" button can still clone it; a spawned window
+   * removes itself once the fade is done.
    */
   function closeWin(): void {
     win.classList.add('closed');
-    if (reconnect) reconnect.hidden = false;
-    else setTimeout(() => win.remove(), reduce ? 0 : 260);
+    if (win.id !== 'ssh') setTimeout(() => win.remove(), reduce ? 0 : 260);
   }
 
   // Drag, raise-to-front, minimize / maximize and the title-bar buttons — the
   // single window-chrome mechanism shared with stand-alone windows (`iframed`).
   makeWindowChrome(win, closeWin);
-
-  if (reconnect)
-    reconnect.addEventListener('click', () => {
-      win.classList.remove('minimized');
-      boot();
-    });
 
   boot();
 }

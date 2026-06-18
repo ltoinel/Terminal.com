@@ -30,6 +30,8 @@ export const site = {
   companyUrl: 'https://www.capgemini.com/',
   nationality: 'France',
   birthPlace: 'Rennes',
+  /** Languages spoken (BCP-47 tags) — schema.org Person `knowsLanguage`. */
+  knowsLanguage: ['fr', 'en'],
   /** Short tagline — meta description / Open Graph default. */
   tagline:
     'Architecte Fullstack & Innovation chez Capgemini. Blogueur tech, hacker éthique, photographe, pilote de drone FPV, vanexplorateur et musicien.',

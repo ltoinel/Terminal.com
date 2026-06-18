@@ -6,12 +6,14 @@ import { Icon } from 'astro-icon/components';
   id="fullscreen-toggle"
   type="button"
   aria-label="Basculer le plein écran"
-  class="chip needs-js font-mono text-sm"
+  class="dock-item needs-js"
 >
-  <Icon name="lucide:maximize" class="h-4 w-4 [html.fs_&]:hidden" />
-  <Icon name="lucide:minimize" class="hidden h-4 w-4 [html.fs_&]:inline" />
-  <span class="[html.fs_&]:hidden">full</span>
-  <span class="hidden [html.fs_&]:inline">exit</span>
+  <Icon name="lucide:maximize" class="[html.fs_&]:hidden" />
+  <Icon name="lucide:minimize" class="hidden [html.fs_&]:inline" />
+  <span class="dock-label">
+    <span class="[html.fs_&]:hidden">full</span>
+    <span class="hidden [html.fs_&]:inline">exit</span>
+  </span>
 </button>
 
 <script>

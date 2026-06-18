@@ -1,0 +1,17 @@
+---
+// macOS-style dock: the window controls as icon tiles, centered at the bottom,
+// with hover magnification and a tooltip label. The three buttons keep their own
+// ids/scripts — they are just restyled as `.dock-item`s and laid out as direct
+// siblings here so the neighbour-magnification CSS can reach them.
+import NewShellButton from './NewShellButton.astro';
+import ThemeToggle from './ThemeToggle.astro';
+import WallpaperButton from './WallpaperButton.astro';
+import FullscreenButton from './FullscreenButton.astro';
+---
+
+<nav class="dock font-mono" aria-label="Dock">
+  <NewShellButton />
+  <ThemeToggle />
+  <WallpaperButton />
+  <FullscreenButton />
+</nav>

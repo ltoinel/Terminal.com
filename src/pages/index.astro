@@ -1,20 +1,15 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import ThemeToggle from '../components/ThemeToggle.astro';
-import FullscreenButton from '../components/FullscreenButton.astro';
-import NewShellButton from '../components/NewShellButton.astro';
+import Dock from '../components/Dock.astro';
 import Terminal from '../components/Terminal.astro';
 import { site } from '../site.config.ts';
+import { latestLastmod } from '../lib/content';
 ---
 
-<Layout>
-  <div class="fixed right-3 top-3 z-[9000] flex gap-2 sm:right-5 sm:top-5">
-    <NewShellButton />
-    <ThemeToggle />
-    <FullscreenButton />
-  </div>
-
+<Layout dateModified={latestLastmod()}>
   <Terminal />
+
+  <Dock />
 
   {
     /* Always-rendered, crawlable identity for the home page: the terminal is the

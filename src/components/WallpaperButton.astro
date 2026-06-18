@@ -1,0 +1,78 @@
+---
+import { Icon } from 'astro-icon/components';
+---
+
+<button
+  id="wallpaper-toggle"
+  type="button"
+  aria-label="Changer le fond d'écran (images Unsplash)"
+  class="dock-item needs-js"
+>
+  <Icon name="lucide:image" />
+  <span class="dock-label">fond</span>
+</button>
+
+<script>
+  import { WALLPAPERS } from '../lib/wallpapers';
+
+  const KEY = 'wallpaper'; // stored index, or 'off'
+  const root = document.documentElement;
+  const layer = document.getElementById('fx-wallpaper');
+  const credit = document.getElementById('wp-credit') as HTMLAnchorElement | null;
+  const btn = document.getElementById('wallpaper-toggle');
+
+  /** Clears any active wallpaper, restoring the default CRT background. */
+  function clear(): void {
+    root.classList.remove('wp');
+    if (layer) layer.style.backgroundImage = '';
+    if (credit) credit.hidden = true;
+  }
+
+  /**
+   * Applies the wallpaper at `index`. The image is preloaded first; the layer is
+   * only revealed once it actually loads, so a CSP block / 404 leaves the current
+   * background untouched (no dim-without-image flash).
+   */
+  function apply(index: number): void {
+    const wp = WALLPAPERS[index];
+    if (!wp || !layer) return;
+    const img = new Image();
+    img.onload = () => {
+      layer.style.backgroundImage = `url("${wp.url}")`;
+      root.classList.add('wp');
+      if (credit) {
+        credit.textContent = `photo : ${wp.credit} ↗`;
+        credit.href = wp.link;
+        credit.hidden = false;
+      }
+    };
+    img.onerror = () => {
+      // Blocked by CSP or unreachable — keep the previous background silently.
+      console.warn('wallpaper: failed to load', wp.url);
+    };
+    img.src = wp.url;
+  }
+
+  // Current index in WALLPAPERS, or -1 for "off". Restore the saved choice.
+  let current = -1;
+  const saved = localStorage.getItem(KEY);
+  if (saved && saved !== 'off') {
+    const i = Number(saved);
+    if (Number.isInteger(i) && i >= 0 && i < WALLPAPERS.length) {
+      current = i;
+      apply(i);
+    }
+  }
+
+  // Cycle: off -> 0 -> 1 -> … -> last -> off.
+  btn?.addEventListener('click', () => {
+    current = current + 1 >= WALLPAPERS.length ? -1 : current + 1;
+    if (current < 0) {
+      clear();
+      localStorage.setItem(KEY, 'off');
+    } else {
+      apply(current);
+      localStorage.setItem(KEY, String(current));
+    }
+  });
+</script>

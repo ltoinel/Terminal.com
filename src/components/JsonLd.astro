@@ -4,6 +4,8 @@
  * block in the document <head>, as a single `@graph`:
  *   - `Person`  — the site owner (identity, always present)
  *   - `WebSite` — the site itself, published by that Person (always present)
+ *   - `ProfilePage` (home) / `WebPage` (sub-pages) — the current document, whose
+ *     `mainEntity` / `about` is the Person (Google's profile-page markup)
  *   - `BreadcrumbList` — Home › <page>, only on sub-pages (when `breadcrumb` set)
  *
  * Self-contained: it reads the central `site.config.ts`, so identity changes in
@@ -12,14 +14,23 @@
 import { site, sameAs } from '../site.config.ts';
 
 interface Props {
+  /** The page `<title>` — used as the WebPage/ProfilePage `name`. */
+  title: string;
   /** Leaf page label (command/document title). Omit on the home page. */
   breadcrumb?: string;
+  /** Last-modified date (YYYY-MM-DD) for the page, if known. */
+  dateModified?: string | null;
 }
-const { breadcrumb } = Astro.props;
+const { title, breadcrumb, dateModified } = Astro.props;
+
+const PERSON_ID = `${site.url}/#person`;
+const WEBSITE_ID = `${site.url}/#website`;
+const here = new URL(Astro.url.pathname, site.url).href;
+const isHome = !breadcrumb;
 
 const person = {
   '@type': 'Person',
-  '@id': `${site.url}/#person`,
+  '@id': PERSON_ID,
   name: site.name,
   givenName: site.firstName,
   familyName: site.lastName,
@@ -29,6 +40,12 @@ const person = {
   jobTitle: site.role,
   description: site.bio,
   knowsAbout: site.knowsAbout,
+  knowsLanguage: site.knowsLanguage,
+  hasOccupation: {
+    '@type': 'Occupation',
+    name: site.role,
+    skills: site.knowsAbout,
+  },
   nationality: { '@type': 'Country', name: site.nationality },
   birthPlace: { '@type': 'Place', name: site.birthPlace },
   worksFor: { '@type': 'Organization', name: site.company, url: site.companyUrl },
@@ -37,20 +54,36 @@ const person = {
 
 const website = {
   '@type': 'WebSite',
-  '@id': `${site.url}/#website`,
+  '@id': WEBSITE_ID,
   url: `${site.url}/`,
   name: site.name,
   description: site.tagline,
   inLanguage: site.lang,
-  publisher: { '@id': `${site.url}/#person` },
+  publisher: { '@id': PERSON_ID },
 };
 
-const graph: object[] = [person, website];
+// The current document: a `ProfilePage` on the home (Google's person-profile
+// markup, mainEntity → Person), a plain `WebPage` on sub-pages.
+const webpage = {
+  '@type': isHome ? 'ProfilePage' : 'WebPage',
+  '@id': `${here}#webpage`,
+  url: here,
+  name: title,
+  isPartOf: { '@id': WEBSITE_ID },
+  inLanguage: site.lang,
+  primaryImageOfPage: new URL(site.ogImage, site.url).href,
+  ...(isHome
+    ? { mainEntity: { '@id': PERSON_ID } }
+    : { about: { '@id': PERSON_ID }, breadcrumb: { '@id': `${here}#breadcrumb` } }),
+  ...(dateModified ? { dateModified } : {}),
+};
+
+const graph: object[] = [person, website, webpage];
 
 if (breadcrumb) {
-  const here = new URL(Astro.url.pathname, site.url).href;
   graph.push({
     '@type': 'BreadcrumbList',
+    '@id': `${here}#breadcrumb`,
     itemListElement: [
       { '@type': 'ListItem', position: 1, name: 'Accueil', item: `${site.url}/` },
       { '@type': 'ListItem', position: 2, name: breadcrumb, item: here },

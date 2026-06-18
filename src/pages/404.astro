@@ -1,0 +1,62 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { site } from '../site.config.ts';
+import { routes } from '../lib/content';
+
+// Static 404 (served by nginx via `error_page 404 /404.html`). Kept out of the
+// index (`noindex`) and given a real way out — links to the home and the main
+// pages — so a bad URL is a dead end for neither users nor crawlers.
+const featured = ['about', 'projects', 'contact', 'whoami', 'help'].filter((s) =>
+  routes.some((r) => r.slug === s),
+);
+---
+
+<Layout title={`404 — ${site.name}`} description="Page introuvable." noindex>
+  <main class="nf" role="main">
+    <p class="ln comment"># {site.shell.host}: erreur 404</p>
+    <h1 class="nf-code accent text-glow">404</h1>
+    <p class="ln nf-msg">La page demandée n'existe pas — ou a été déplacée.</p>
+    <nav class="nf-nav" aria-label="Pages principales">
+      <a href="/">accueil</a>
+      {featured.map((s) => <a href={`/${s}/`}>{s}</a>)}
+    </nav>
+  </main>
+</Layout>
+
+<style>
+  .nf {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    padding: 1.5rem;
+    text-align: center;
+  }
+  .nf-code {
+    margin: 0;
+    font-family: 'VT323', ui-monospace, monospace;
+    font-size: clamp(4rem, 22vw, 9rem);
+    line-height: 1;
+  }
+  .nf-msg {
+    max-width: 32rem;
+  }
+  .nf-nav {
+    margin-top: 0.8rem;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem 1rem;
+  }
+  .nf-nav a {
+    color: var(--cyan);
+    text-decoration: none;
+  }
+  .nf-nav a:hover {
+    text-shadow: var(--glow);
+  }
+</style>

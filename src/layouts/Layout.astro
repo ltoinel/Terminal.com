@@ -10,16 +10,26 @@ interface Props {
   description?: string;
   /** Leaf label for the schema.org breadcrumb (sub-pages only; omit on home). */
   breadcrumb?: string;
+  /** Last-modified date (YYYY-MM-DD) for structured data / `article:modified_time`. */
+  dateModified?: string | null;
+  /** Keep the page out of the index (e.g. the 404 page). */
+  noindex?: boolean;
 }
 
 const {
   title = `${site.name} - ${site.role} @ ${site.company}`,
   description = site.tagline,
   breadcrumb,
+  dateModified,
+  noindex = false,
 } = Astro.props;
 
 const canonical = new URL(Astro.url.pathname, site.url).href;
 const ogImage = new URL(site.ogImage, site.url).href;
+// The home is the person profile; sub-pages are content articles. This drives
+// `og:type` (and the profile/article-specific tags below).
+const isHome = !breadcrumb;
+const robots = noindex ? 'noindex, follow' : 'index, follow, max-image-preview:large';
 ---
 
 <!doctype html>
@@ -41,7 +51,7 @@ const ogImage = new URL(site.ogImage, site.url).href;
     <meta name="title" content={title} />
     <meta name="description" content={description} />
     <meta name="author" content={site.name} />
-    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="robots" content={robots} />
     {
       site.googleSiteVerification && (
         <meta name="google-site-verification" content={site.googleSiteVerification} />
@@ -50,7 +60,7 @@ const ogImage = new URL(site.ogImage, site.url).href;
     <meta name="theme-color" content="#080b09" />
 
     <!-- Open Graph -->
-    <meta property="og:type" content="profile" />
+    <meta property="og:type" content={isHome ? 'profile' : 'article'} />
     <meta property="og:url" content={canonical} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
@@ -61,9 +71,21 @@ const ogImage = new URL(site.ogImage, site.url).href;
     <meta property="og:image:alt" content={`Portrait de ${site.name}`} />
     <meta property="og:locale" content={site.locale} />
     <meta property="og:site_name" content={site.name} />
-    <meta property="profile:first_name" content={site.firstName} />
-    <meta property="profile:last_name" content={site.lastName} />
-    <meta property="profile:gender" content="male" />
+    {
+      isHome ? (
+        <>
+          <meta property="profile:first_name" content={site.firstName} />
+          <meta property="profile:last_name" content={site.lastName} />
+          <meta property="profile:gender" content="male" />
+        </>
+      ) : (
+        <>
+          <meta property="article:author" content={`${site.url}/`} />
+          <meta property="article:section" content={site.role} />
+          {dateModified && <meta property="article:modified_time" content={dateModified} />}
+        </>
+      )
+    }
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary" />
@@ -85,7 +107,7 @@ const ogImage = new URL(site.ogImage, site.url).href;
     />
 
     <!-- schema.org structured data -->
-    <JsonLd breadcrumb={breadcrumb} />
+    <JsonLd title={title} breadcrumb={breadcrumb} dateModified={dateModified} />
 
     <!-- Anti-FOUC: flag JS (reveals the terminal) and apply the saved theme
          before first paint. Green (the default) carries no `data-theme`; any
@@ -99,6 +121,11 @@ const ogImage = new URL(site.ogImage, site.url).href;
   </head>
 
   <body>
+    <!-- Optional Unsplash wallpaper (toggled by the dock's `fond` button), behind
+         everything; the CRT effects layer on top of it. -->
+    <div class="fx-wallpaper" id="fx-wallpaper" aria-hidden="true"></div>
+    <a class="wp-credit" id="wp-credit" target="_blank" rel="noopener noreferrer" hidden></a>
+
     <!-- Matrix digital-rain background (green theme) -->
     <MatrixRain />
 

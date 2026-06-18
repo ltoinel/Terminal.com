@@ -2,14 +2,9 @@
 import { Icon } from 'astro-icon/components';
 ---
 
-<button
-  id="theme-toggle"
-  type="button"
-  aria-label="Changer le thème (CRT)"
-  class="chip font-mono text-sm"
->
-  <Icon name="lucide:square-terminal" class="h-4 w-4" />
-  <span id="theme-label">crt</span>
+<button id="theme-toggle" type="button" aria-label="Changer le thème (CRT)" class="dock-item">
+  <Icon name="lucide:square-terminal" />
+  <span class="dock-label" id="theme-label">crt</span>
 </button>
 
 <script>

@@ -11,6 +11,7 @@
  * `terminal.ts`, which reads the data back from injected JSON.
  */
 
+import { statSync } from 'node:fs';
 import { validateCommands } from './commands.ts';
 import type { CmdDef } from './commands.ts';
 import { site } from '../site.config.ts';
@@ -269,3 +270,33 @@ export const routes: Route[] = [
     return { slug, ...metaFromMarkdown(content, slug), body: manToHtml(content) };
   }),
 ];
+
+/** `root/` mirror of the configured HOME (e.g. `/home/guest` -> `root/home/guest`). */
+const HOME_DIR = `root${site.shell.home.replace(/\/+$/, '')}`;
+
+/**
+ * W3C date (YYYY-MM-DD) of a route's source file: commands live in `root/bin/`,
+ * home documents in HOME. Returns null if neither exists. Build-time only — used
+ * by the sitemap (`<lastmod>`) and the JSON-LD (`dateModified`).
+ */
+export function lastmod(slug: string): string | null {
+  for (const path of [`root/bin/${slug}.md`, `${HOME_DIR}/${slug}.md`]) {
+    try {
+      return statSync(path).mtime.toISOString().slice(0, 10);
+    } catch {
+      // try the next candidate
+    }
+  }
+  return null;
+}
+
+/** Most recent `lastmod` across every route — the home page's effective date. */
+export function latestLastmod(): string | null {
+  return (
+    routes
+      .map((r) => lastmod(r.slug))
+      .filter((d): d is string => d !== null)
+      .sort()
+      .pop() ?? null
+  );
+}

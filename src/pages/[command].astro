@@ -1,10 +1,8 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import ThemeToggle from '../components/ThemeToggle.astro';
-import FullscreenButton from '../components/FullscreenButton.astro';
-import NewShellButton from '../components/NewShellButton.astro';
+import Dock from '../components/Dock.astro';
 import Terminal from '../components/Terminal.astro';
-import { routes, commandDefs, manToHtml, manMetaDescription } from '../lib/content';
+import { routes, commandDefs, manToHtml, manMetaDescription, lastmod } from '../lib/content';
 import { site } from '../site.config.ts';
 
 // One static page per deep-linkable command / document. Opening the URL boots
@@ -28,6 +26,7 @@ export function getStaticPaths() {
         desc: r.desc,
         manHtml,
         manDesc: man ? manMetaDescription(man) : '',
+        dateModified: lastmod(r.slug),
       },
     };
   });
@@ -42,8 +41,10 @@ interface Props {
   manHtml: string;
   /** Meta description taken from the man DESCRIPTION section (empty if none). */
   manDesc: string;
+  /** Source file's last-modified date (YYYY-MM-DD), or null. */
+  dateModified: string | null;
 }
-const { label, desc, manHtml, manDesc } = Astro.props;
+const { label, desc, manHtml, manDesc, dateModified } = Astro.props;
 
 // <title> seeds from the route title. The meta description prefers the richer
 // man DESCRIPTION; otherwise the short route desc plus a context suffix (kept
@@ -54,14 +55,10 @@ const fallback = desc.length + suffix.length <= 160 ? `${desc}${suffix}` : desc;
 const description = manDesc || fallback;
 ---
 
-<Layout title={title} description={description} breadcrumb={label}>
-  <div class="fixed right-3 top-3 z-[9000] flex gap-2 sm:right-5 sm:top-5">
-    <NewShellButton />
-    <ThemeToggle />
-    <FullscreenButton />
-  </div>
-
+<Layout title={title} description={description} breadcrumb={label} dateModified={dateModified}>
   <Terminal />
+
+  <Dock />
 
   {/* Crawlable mirror of the manual the terminal renders on load. */}
   {manHtml && <article class="sr-only" set:html={manHtml} />}

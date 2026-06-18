@@ -70,10 +70,6 @@ const safe = (o: unknown) => JSON.stringify(o).replace(/</g, '\\u003c');
   <span class="ssh-grip" aria-hidden="true"></span>
 </section>
 
-<button type="button" class="ssh-reconnect needs-js" id="ssh-reconnect" hidden>
-  ⏻ reconnect — ssh {site.shell.host}
-</button>
-
 <script type="application/json" id="shell-cfg" is:inline set:html={safe(cfg)} />
 
 <script>
