@@ -59,8 +59,6 @@ export const site = {
   twitter: '@ltoinel',
   /** Google Search Console verification token (empty to omit the meta tag). */
   googleSiteVerification: '2gYYxN0DAxC3iK23exWNrujGcR9AmqtKM87J2GLkN5o',
-  /** Wikidata entity — used for `rel=me` and as the first `sameAs` entry. */
-  wikidata: 'https://www.wikidata.org/wiki/Q140004299',
 
   /* --------------------------- interactive shell ---------------------- */
   shell: {
@@ -103,8 +101,5 @@ export const openLinks: Record<string, string> = (() => {
   return out;
 })();
 
-/** schema.org `sameAs` list: Wikidata first, then every flagged profile. */
-export const sameAs: string[] = [
-  site.wikidata,
-  ...site.links.filter((l) => l.sameAs).map((l) => l.url),
-];
+/** schema.org `sameAs` list: every profile flagged `sameAs` in the link list. */
+export const sameAs: string[] = site.links.filter((l) => l.sameAs).map((l) => l.url);

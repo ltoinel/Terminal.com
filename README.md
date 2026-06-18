@@ -219,8 +219,8 @@ and the structured-data block in `src/components/JsonLd.astro`:
 
 - `<title>`, meta description, canonical, `theme-color`
 - Open Graph + Twitter Card (image: `public/ludovic-toinel.jpg`, 800×800)
-- `schema.org/Person` JSON-LD (jobTitle, worksFor, birthPlace, **sameAs** including
-  Wikidata + the profiles flagged `sameAs` in `site.config.ts`)
+- `schema.org/Person` JSON-LD (jobTitle, worksFor, birthPlace, **sameAs** — the
+  profiles flagged `sameAs` in `site.config.ts`)
 - Generated sitemap (`/sitemap.xml`) + `robots.txt`
 
 ## Deployment
