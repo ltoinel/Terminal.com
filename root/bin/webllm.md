@@ -38,6 +38,11 @@ man: |
   loaded model stays in GPU memory for the page session, so re-running
   webllm with the same model resumes instantly; webllm --unload frees it.
 
+  Type /voice in the chat to have the replies read aloud through the
+  browser's built-in speech synthesis (Web Speech API) — no server, fully
+  client-side. /voice toggles it, /voice off stops, and /voice <lang>
+  (e.g. /voice fr-FR) gives the synthesizer a language hint.
+
   Smaller models start faster and use less memory but are less capable;
   larger ones are smarter but download more and need a stronger GPU.
 
@@ -64,6 +69,8 @@ man: |
   /exit /quit /bye  close the chat session
   /reset /clear     forget the conversation context (keep the model)
   /model            show the model currently loaded
+  /voice [on|off]   read the replies aloud (toggles; off by default)
+  /voice <lang>     read aloud in a language hint, e.g. /voice fr-FR
   /help             list these chat commands
 
   ## EXAMPLES
@@ -388,7 +395,7 @@ js: |
   // ---- chat session ----
   ctx.line('');
   ctx.append('<div class="ln"><span class="accent text-glow">● chat ready</span> <span class="comment">— ' + E(modelId) + '</span></div>');
-  ctx.line('Type a message and press Enter. Commands: /exit · /reset · /model · /help');
+  ctx.line('Type a message and press Enter. Commands: /exit · /reset · /model · /voice · /help');
   ctx.line('');
 
   const SYSTEM = {
@@ -397,12 +404,29 @@ js: |
   };
   let messages = [SYSTEM];
 
+  // ---- text-to-speech (/voice) ----
+  // Optional read-aloud of the assistant's replies via the browser's built-in
+  // Web Speech API (speechSynthesis) — no dependency, fully client-side. Off by
+  // default; toggled in-chat with /voice. `voiceLang` is an optional BCP-47 hint
+  // (e.g. fr-FR) passed to the utterance so the browser picks a matching voice.
+  const tts = ('speechSynthesis' in window) ? window.speechSynthesis : null;
+  let voice = false;
+  let voiceLang = '';
+  const speak = (text) => {
+    if (!tts || !text || !text.trim()) return;
+    const u = new SpeechSynthesisUtterance(text);
+    if (voiceLang) u.lang = voiceLang;
+    try { tts.speak(u); } catch (e) { /* ignore */ }
+  };
+  const stopSpeaking = () => { if (tts) { try { tts.cancel(); } catch (e) { /* ignore */ } } };
+
   // Ctrl+C (ctx.signal) interrupts a running generation and ends the session.
   let interrupted = false;
   if (ctx.signal) {
     ctx.signal.addEventListener('abort', () => {
       interrupted = true;
       try { engine.interruptGenerate(); } catch (e) { /* ignore */ }
+      stopSpeaking();
     }, { once: true });
   }
 
@@ -416,10 +440,19 @@ js: |
     ctx.append('<div class="ln"><span class="prompt">you›</span> <span class="cmd">' + E(q) + '</span></div>');
 
     const low = q.toLowerCase();
-    if (low === '/exit' || low === '/quit' || low === '/bye') { ctx.line('bye 👋'); break; }
-    if (low === '/help') { ctx.line('/exit  quit  ·  /reset  clear context  ·  /model  show model'); continue; }
+    if (low === '/exit' || low === '/quit' || low === '/bye') { stopSpeaking(); ctx.line('bye 👋'); break; }
+    if (low === '/help') { ctx.line('/exit  quit  ·  /reset  clear context  ·  /model  show model  ·  /voice  read replies aloud'); continue; }
     if (low === '/model') { ctx.line('model: ' + modelId); continue; }
-    if (low === '/reset' || low === '/clear') { messages = [SYSTEM]; ctx.line('context cleared.'); continue; }
+    if (low === '/reset' || low === '/clear') { messages = [SYSTEM]; stopSpeaking(); ctx.line('context cleared.'); continue; }
+    if (low === '/voice' || low.startsWith('/voice ')) {
+      if (!tts) { ctx.error('voice: speech synthesis is not available in this browser.'); continue; }
+      const arg = (q.split(/\s+/)[1] || '').toLowerCase();
+      if (arg === 'off' || (arg === '' && voice)) { voice = false; stopSpeaking(); ctx.line('voice: off'); }
+      else if (arg === 'on' || arg === '') { voice = true; ctx.line('voice: on — replies will be read aloud' + (voiceLang ? ' (' + voiceLang + ')' : '')); }
+      else if (/^[a-z]{2}(-[a-z]{2})?$/.test(arg)) { voiceLang = arg; voice = true; ctx.line('voice: on (' + voiceLang + ')'); }
+      else { ctx.line('usage: /voice [on|off|<lang>]   e.g. /voice fr-FR'); }
+      continue;
+    }
 
     messages.push({ role: 'user', content: q });
 
@@ -428,6 +461,17 @@ js: |
     const replyEl = row.querySelector('.reply');
     let reply = '';
     let usage = null;
+    // When /voice is on, enqueue completed sentences to the speech synthesizer
+    // as they stream in (lower latency than waiting for the full reply). `spoken`
+    // tracks how much of `reply` has already been handed to speechSynthesis.
+    let spoken = 0;
+    const flushSpeech = (force) => {
+      if (!voice || !tts) return;
+      const rest = reply.slice(spoken);
+      if (force) { if (rest.trim()) { speak(rest); spoken = reply.length; } return; }
+      const m = rest.match(/^[\s\S]*[.!?…\n]/); // up to and including the last sentence end
+      if (m) { speak(m[0]); spoken += m[0].length; }
+    };
     try {
       const stream = await engine.chat.completions.create({
         messages,
@@ -441,6 +485,7 @@ js: |
           reply += delta;
           replyEl.classList.remove('comment');
           replyEl.textContent = reply;
+          flushSpeech(false);
           toBottom();
         }
         if (chunk.usage) usage = chunk.usage;
@@ -449,6 +494,9 @@ js: |
     } catch (e) {
       if (!(ctx.signal && ctx.signal.aborted)) ctx.error('webllm: generation failed — ' + (e.message || e.name));
     }
+
+    // Speak whatever trailing text never ended on a sentence boundary.
+    if (!(ctx.signal && ctx.signal.aborted)) flushSpeech(true);
 
     if (!reply) replyEl.textContent = interrupted ? '⏹ interrupted' : '(no output)';
     messages.push({ role: 'assistant', content: reply });
