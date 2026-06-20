@@ -12,6 +12,7 @@
  */
 
 import { statSync } from 'node:fs';
+import { transformSync } from 'esbuild';
 import { validateCommands } from './commands.ts';
 import type { CmdDef } from './commands.ts';
 import { site } from '../site.config.ts';
@@ -70,6 +71,33 @@ export const tree: VDir = (() => {
   return root;
 })();
 
+/**
+ * Minify a command's `js` block before it ships in `/shell-commands.json`.
+ *
+ * The block is an *async function body* (top-level `await`/`return`), invalid on
+ * its own — so we wrap it in `async function (ctx){…}`, minify, then slice the
+ * body back out. Identifiers are kept (`minifyIdentifiers:false`): `ctx` is the
+ * runtime-injected parameter and locals can be referenced via the AsyncFunction
+ * scope, so renaming them would be unsafe; only whitespace, comments and syntax
+ * are compacted (~30 % smaller). This is size/tidiness, NOT real protection —
+ * client JS is always recoverable. On any failure, fall back to the source.
+ */
+function minifyJs(js: string): string {
+  try {
+    const out = transformSync(`async function __cmd(ctx){\n${js}\n}`, {
+      loader: 'js',
+      minifyWhitespace: true,
+      minifySyntax: true,
+      minifyIdentifiers: false,
+    }).code.trim();
+    const open = out.indexOf('{');
+    const close = out.lastIndexOf('}');
+    return open >= 0 && close > open ? out.slice(open + 1, close).trim() : js;
+  } catch {
+    return js; // never let a minify hiccup break the build
+  }
+}
+
 /** Commands (one per `root/bin/*.md`), parsed and validated at build time. */
 export const commandDefs: CmdDef[] = (() => {
   const binEntries: [string, string][] = rawEntries
@@ -78,7 +106,8 @@ export const commandDefs: CmdDef[] = (() => {
   const { defs, errors } = validateCommands(binEntries);
   if (errors.length)
     throw new Error(`Invalid command definition(s):\n  - ${errors.join('\n  - ')}`);
-  return defs;
+  // Ship a minified `js` block (the validator already parsed the source above).
+  return defs.map((d) => (d.js ? { ...d, js: minifyJs(d.js) } : d));
 })();
 
 /** Home documents (`~`) eligible for a landing page: the `.md` files in HOME. */
