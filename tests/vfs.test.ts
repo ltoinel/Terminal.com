@@ -148,7 +148,7 @@ describe('identity (su / exit) and permissions', () => {
     expect(vfs.denied('/root/secret.md')).toBe(false);
   });
   it('rejects su for a non-root user', () => {
-    expect(vfs.su('alice')).toContain("l'utilisateur");
+    expect(vfs.su('alice')).toContain('does not exist');
     expect(vfs.isRoot()).toBe(false);
   });
   it('exit (popIdentity) restores the previous identity', () => {

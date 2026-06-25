@@ -24,8 +24,8 @@ man: |
   exit, cd, sudo
 js: |
   // Authenticate (masked input) before elevating. The password is "password".
-  const pw = await ctx.ask('Mot de passe :', { secret: true });
-  if (pw !== 'password') { ctx.error("su: échec d'authentification"); return; }
+  const pw = await ctx.ask('Password:', { secret: true });
+  if (pw !== 'password') { ctx.error('su: authentication failure'); return; }
   const err = ctx.su(ctx.args[0]);
   if (err) ctx.error(err);
 ---

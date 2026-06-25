@@ -134,7 +134,7 @@ export function createVfs(opts: VfsOptions): Vfs {
   /** Becomes root (`su` / `su root`); other users are rejected. */
   function su(target?: string): string | null {
     const name = (target ?? 'root').trim() || 'root';
-    if (name !== 'root') return `su: l'utilisateur « ${name} » n'existe pas`;
+    if (name !== 'root') return `su: user "${name}" does not exist`;
     if (isRoot) return null; // already root — no-op
     idStack.push({ isRoot, home, cwd, prevCwd });
     isRoot = true;

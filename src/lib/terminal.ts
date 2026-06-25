@@ -566,6 +566,9 @@ export function initTerminal(win0: HTMLElement | null, allowDeepLink = true): vo
       exit: () => {
         if (!vfs.popIdentity()) closeWin();
       },
+      // Unconditionally closes this terminal window (used by `shutdown`/`reboot`),
+      // regardless of any `su` identity stack.
+      close: () => closeWin(),
       exec: (name: string, a: string[] = []) => commands[name]?.run(a),
       // Runs a full command line headlessly and returns its captured stdout/stderr
       // as text — used by the Denree agent to read a command's output as data.

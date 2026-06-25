@@ -40,7 +40,7 @@ man: |
   ## OPTIONS
   --commands, --list   list the commands the agent may use
   --model <id>         pick the reasoning model (default: Qwen2.5-1.5B)
-  --steps <n>          cap the number of agent turns (default: 6)
+  --steps <n>          cap the number of agent turns (default: 4)
   --unload, --stop     free the loaded model from GPU memory
 
   ## EXAMPLES
@@ -64,13 +64,13 @@ js: |
 
   // Default reasoning model (proposed when nothing is already loaded).
   const DEFAULT = { base: 'Qwen2.5-1.5B-Instruct', label: 'Qwen2.5 1.5B', gb: 1.0 };
-  const MAX_STEPS = 6;
+  const MAX_STEPS = 4;
 
   // Commands the agent must never run: mutations, control, side effects, and the
   // LLM/agent commands themselves. Everything else is usable.
   const DENY = new Set([
     'rm', 'su', 'sudo', 'exit', 'clear', 'boot', 'msg', 'open', 'iframed',
-    'theme', 'bell', 'miaougpt', 'llm', 'glaude', 'denree',
+    'theme', 'bell', 'miaougpt', 'llm', 'glaude', 'denree', 'shutdown', 'reboot',
   ]);
 
   // The model only PICKS a command each turn (whether the goal is answered is
@@ -270,12 +270,12 @@ js: |
     if (!observations.length) return '';
     const obsText = observations.map((o) => '$ ' + o.command + '\n' + o.observation).join('\n\n').slice(0, 3000);
     const guard = lenient
-      ? 'Give the best possible answer from the outputs; if they truly do not contain it, briefly say you could not find it.'
-      : 'If the outputs do NOT already contain enough to answer the question, reply with exactly: NEED_MORE';
+      ? 'Base the answer strictly on the outputs. Do NOT invent, guess, convert, or substitute values that are not present (e.g. never present a local time as another timezone). If the outputs do not contain the answer, say — in the question\'s language — that you could not find it with the available commands.'
+      : 'Answer only if the outputs clearly and directly contain the answer. Do NOT assume, invent, convert, or substitute values that are not present. If the answer is not in the outputs, reply with exactly: NEED_MORE';
     try {
       const res = await ctx.llm.chat({
         messages: [
-          { role: 'system', content: 'You answer the user\'s question based ONLY on the provided command outputs. Be concise and write in the same language as the question. ' + guard },
+          { role: 'system', content: 'You answer the user\'s question using ONLY the literal facts in the provided command outputs. Be concise and reply in the SAME language as the question. ' + guard },
           { role: 'user', content: 'Question: ' + goal + '\n\nCommand outputs:\n' + obsText + '\n\nAnswer:' },
         ],
         temperature: 0, stream: false, signal: ctx.signal,
@@ -317,10 +317,17 @@ js: |
       break;
     }
 
-    // Normalize a path-prefixed command (/bin/cat → cat).
-    const head = rawCmd.match(/^(\S+)([\s\S]*)$/);
-    const baseName = head ? head[1].replace(/^.*\//, '') : rawCmd;
-    const command = head ? baseName + head[2] : rawCmd;
+    // Normalize the command line the way the model tends to over-decorate it:
+    //  - drop leading `VAR=value` environment assignments (e.g. `TZ=Asia/Tokyo date`),
+    //    which the shell does not support anyway;
+    //  - strip a path on the command name (`/bin/cat` → `cat`).
+    // This is what makes the existence/allow check see the REAL command name.
+    let rest = rawCmd;
+    let envMatch;
+    while ((envMatch = rest.match(/^[A-Za-z_][A-Za-z0-9_]*=\S*\s+(\S[\s\S]*)$/))) rest = envMatch[1];
+    const head = rest.match(/^(\S+)([\s\S]*)$/);
+    const baseName = head ? head[1].replace(/^.*\//, '') : rest;
+    const command = head ? baseName + head[2] : rest;
 
     // Repeat → the model is stuck. Stop and answer from what we already have.
     if (ran.has(command)) {
@@ -333,16 +340,19 @@ js: |
     if (act.thought) ctx.append('<div class="ln comment">💭 ' + E(act.thought) + '</div>');
     ctx.append('<div class="ln"><span class="prompt">▸</span> <span class="cmd">' + E(command) + '</span></div>');
 
-    // Reject shell wrappers — there is no shell; commands run directly. A small
-    // model loves to wrap things in `bash -c "..."` / `/bin/bash -c`, which the
-    // basename check would reject anyway, but this gives a corrective message.
+    // Gate before execution: reject shell wrappers, verify the command actually
+    // EXISTS in the registry (so a hallucinated command is reported as such), and
+    // that it is within the allowed set. Only then do we run it.
     const isShellWrap = /^(?:ba|z)?sh$/.test(baseName) || /(?:^|\s)(?:ba|z)?sh\s+-[a-z]*c\b/.test(command);
+    const known = ctx.commands.some((c) => c.name === baseName || (c.alias || []).includes(baseName));
     const allowed = !isShellWrap && usable.some((c) => c.name === baseName || (c.alias || []).includes(baseName));
     let observation;
     if (isShellWrap) {
       observation = 'Do not wrap commands in a shell — there is no bash/sh here. Run the target command directly (e.g. `date`, not `bash -c "date"`).';
+    } else if (!known) {
+      observation = 'command "' + baseName + '" not found — it is not a real command here. Use only the commands listed in your instructions.';
     } else if (!allowed) {
-      observation = 'command "' + baseName + '" is not allowed for the agent.';
+      observation = 'command "' + baseName + '" exists but is not allowed for the agent.';
     } else {
       ranCount++;
       const ex = await ctx.capture(command);
@@ -363,7 +373,7 @@ js: |
     }
 
     transcript.push({ role: 'assistant', content });
-    transcript.push({ role: 'user', content: 'Observation from `' + command + '`:\n' + observation + '\n\nThat is not enough to fully answer the goal yet. Choose the next command (or an empty command if none can help).' });
+    transcript.push({ role: 'user', content: 'Observation from `' + command + '`:\n' + observation + '\n\nThe outputs so far do not answer the goal. Choose ONE different command whose output would DIRECTLY provide the missing information. Do not pick an unrelated command. If no available command can provide it, return an empty command to stop.' });
   }
 
   // Still no answer (stuck / budget reached / model declined): lenient synthesis.
