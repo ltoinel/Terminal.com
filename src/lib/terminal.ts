@@ -19,6 +19,20 @@ import { THEMES, applyTheme, currentTheme } from './themes';
 import { createVfs, vdir, type VDir } from './vfs';
 import { raiseZ, nextCascadeOffset, makeWindowChrome, spawnIframe } from './windows';
 import { parseCommandLine, type Stage } from './shell-parse';
+import {
+  ensureModel,
+  llmChat,
+  getLlmState,
+  recommendedModels,
+  llmModels,
+  cacheList,
+  cacheRemove,
+  cacheRemoveAll,
+  unloadModel,
+  interruptLlm,
+  type EnsureOptions,
+  type ChatRequest,
+} from './llm';
 
 /** Configuration injected via `#shell-cfg`. */
 interface Cfg {
@@ -335,6 +349,10 @@ export function initTerminal(win0: HTMLElement | null, allowDeepLink = true): vo
   // command that renders its own HTML, like `grep`, still pipes/redirects as
   // plain text).
   let captureBuf: string[] | null = null;
+  // When set, stderr (`printErr`) is recorded here instead of painted — used by
+  // the headless `captureLine` (Denree) so an error message is returned, not
+  // splashed onto the visible terminal during a programmatic run.
+  let errSink: string[] | null = null;
   // Piped input handed to the running command via `ctx.stdin` (empty if none).
   let currentStdin = '';
 
@@ -390,8 +408,12 @@ export function initTerminal(win0: HTMLElement | null, allowDeepLink = true): vo
     append(`<div class="ln out">${inline(text)}</div>`, 'reveal-line is-in');
   }
 
-  /** Prints an error line (red, escaped text). */
+  /** Prints an error line (red, escaped text), or records it when capturing stderr. */
   function printErr(text: string): void {
+    if (errSink) {
+      errSink.push(text);
+      return;
+    }
     append(`<div class="ln" style="color:#ff6b6b">${escapeHtml(text)}</div>`);
   }
 
@@ -545,6 +567,56 @@ export function initTerminal(win0: HTMLElement | null, allowDeepLink = true): vo
         if (!vfs.popIdentity()) closeWin();
       },
       exec: (name: string, a: string[] = []) => commands[name]?.run(a),
+      // Runs a full command line headlessly and returns its captured stdout/stderr
+      // as text — used by the Denree agent to read a command's output as data.
+      capture: (line: string) => captureLine(line),
+      // The single, central LLM manager (src/lib/llm.ts) wired to this terminal:
+      // `ensure` asks for consent in the shell and draws a progress bar; `chat`
+      // routes generation through the manager so the top-right widget stays in
+      // sync (model + cumulative in/out tokens). No model is loaded by default.
+      llm: {
+        state: () => getLlmState(),
+        models: () => llmModels(),
+        recommended: () => recommendedModels(),
+        cacheList: () => cacheList(),
+        cacheRemove: (id: string) => cacheRemove(id),
+        cacheRemoveAll: () => cacheRemoveAll(),
+        unload: () => unloadModel(),
+        chat: (req: ChatRequest) => llmChat(req),
+        interrupt: () => interruptLlm(),
+        // Ensures a model is loaded; prompts the user for consent (unless the
+        // caller supplies its own `confirm`) and renders a download bar.
+        ensure: (opts: EnsureOptions) => {
+          const merged: EnsureOptions = { ...opts };
+          if (!merged.confirm) {
+            merged.confirm = async (info) => {
+              const human = info.gb != null ? `${info.label} (~${info.gb} GB)` : info.label;
+              const why = info.reason ? ` — ${info.reason}` : '';
+              const ans = ((await readLine(`load "${human}"${why}? [Y/n]`)) || '')
+                .trim()
+                .toLowerCase();
+              return ans !== 'n' && ans !== 'no';
+            };
+          }
+          if (!merged.onProgress) {
+            let progEl: HTMLElement | null = null;
+            const BARW = 28;
+            merged.onProgress = (r) => {
+              if (!progEl) {
+                append(
+                  '<div class="ln"><span class="accent text-glow">↓ loading model</span></div>',
+                );
+                progEl = append('<div class="ln comment">preparing…</div>');
+              }
+              const f = Math.max(0, Math.min(BARW, Math.round((r.progress || 0) * BARW)));
+              const bar = `[${'#'.repeat(f)}${'·'.repeat(BARW - f)}] ${Math.round((r.progress || 0) * 100)}%`;
+              progEl.innerHTML = `<span class="accent">${escapeHtml(bar)}</span> <span class="comment">${escapeHtml((r.text || '').slice(0, 70))}</span>`;
+              scrollEnd();
+            };
+          }
+          return ensureModel(merged);
+        },
+      },
       // Aborts when the user presses Ctrl+C during a long command (fetch, loops).
       signal: currentAbort ? currentAbort.signal : undefined,
     };
@@ -577,6 +649,39 @@ export function initTerminal(win0: HTMLElement | null, allowDeepLink = true): vo
 
   /* --------------------------- execution ---------------------------- */
 
+  /** Runs one pipeline stage; returns its captured stdout, or null when not captured. */
+  async function runStage(stage: Stage, capture: boolean): Promise<string[] | null> {
+    const cmd = commands[stage.name];
+    const buf = capture ? [] : null;
+    captureBuf = buf;
+    try {
+      if (cmd) {
+        await cmd.run(stage.args);
+      } else {
+        // Not a command: try the path as a file (implicit `cat`) in the current dir.
+        const res = vfs.readPath(stage.name);
+        if (res.error) printErr(`${stage.name}: command not found — type \`help\``);
+        else if ((res.name || '').endsWith('.md')) printBlock(res.content as string);
+        else printRaw(res.content as string);
+      }
+    } finally {
+      captureBuf = null;
+    }
+    return buf;
+  }
+
+  /** Persists a redirection's captured output to the VFS (`>` / `>>`). */
+  function writeRedirect(redirect: { path: string; append: boolean }, lastBuf: string[]): void {
+    let content = lastBuf.join('\n');
+    if (content && !content.endsWith('\n')) content += '\n';
+    if (redirect.append) {
+      const prev = vfs.readPath(redirect.path);
+      if (!prev.error) content = (prev.content ?? '') + content;
+    }
+    const err = vfs.mutate('write', redirect.path, { content });
+    if (err) printErr(err);
+  }
+
   /**
    * Runs a typed line: echo, history, then dispatch to a command, otherwise to
    * a home document (implicit `cat`), otherwise an error.
@@ -605,27 +710,6 @@ export function initTerminal(win0: HTMLElement | null, allowDeepLink = true): vo
       return;
     }
 
-    /** Runs one stage; returns its captured stdout, or null when not captured. */
-    const runStage = async (stage: Stage, capture: boolean): Promise<string[] | null> => {
-      const cmd = commands[stage.name];
-      const buf = capture ? [] : null;
-      captureBuf = buf;
-      try {
-        if (cmd) {
-          await cmd.run(stage.args);
-        } else {
-          // Not a command: try the path as a file (implicit `cat`) in the current dir.
-          const res = vfs.readPath(stage.name);
-          if (res.error) printErr(`${stage.name}: command not found — type \`help\``);
-          else if ((res.name || '').endsWith('.md')) printBlock(res.content as string);
-          else printRaw(res.content as string);
-        }
-      } finally {
-        captureBuf = null;
-      }
-      return buf;
-    };
-
     // Fresh abort handle per command, exposed to its `js` via `ctx.signal` and
     // triggered by Ctrl+C (see the keydown handler).
     currentAbort = new AbortController();
@@ -646,17 +730,47 @@ export function initTerminal(win0: HTMLElement | null, allowDeepLink = true): vo
       currentAbort = null;
     }
 
-    if (redirect && lastBuf) {
-      // Each captured stdout block becomes a line; ensure a trailing newline.
-      let content = lastBuf.join('\n');
-      if (content && !content.endsWith('\n')) content += '\n';
-      if (redirect.append) {
-        const prev = vfs.readPath(redirect.path);
-        if (!prev.error) content = (prev.content ?? '') + content;
+    if (redirect && lastBuf) writeRedirect(redirect, lastBuf);
+  }
+
+  /**
+   * Runs a command line headlessly: every stage is captured (nothing is painted
+   * to the screen, stderr included), and the final stdout is returned as text.
+   * Powers `ctx.capture` (e.g. the `denree` agent reads a command's output as
+   * data). Reuses an outer command's abort signal when present, so Ctrl+C still
+   * cancels.
+   */
+  async function captureLine(
+    raw: string,
+  ): Promise<{ ok: boolean; stdout: string; stderr: string }> {
+    const line = (raw || '').trim();
+    if (!line) return { ok: true, stdout: '', stderr: '' };
+    const { stages, redirect, error } = parseCommandLine(line);
+    if (error) return { ok: false, stdout: '', stderr: error };
+
+    const prevAbort = currentAbort;
+    const prevStdin = currentStdin;
+    const errBuf: string[] = [];
+    errSink = errBuf;
+    if (!currentAbort) currentAbort = new AbortController();
+    let lastBuf: string[] | null = null;
+    currentStdin = '';
+    try {
+      for (let i = 0; i < stages.length; i++) {
+        lastBuf = await runStage(stages[i], true); // capture every stage
+        currentStdin = lastBuf ? lastBuf.join('\n') : '';
       }
-      const err = vfs.mutate('write', redirect.path, { content });
-      if (err) printErr(err);
+      if (redirect && lastBuf) writeRedirect(redirect, lastBuf);
+    } finally {
+      captureBuf = null;
+      currentStdin = prevStdin;
+      currentAbort = prevAbort;
+      errSink = null;
     }
+    const stderr = errBuf.join('\n');
+    // A redirected line's stdout went to the file, so report it as empty.
+    const stdout = redirect ? '' : lastBuf ? lastBuf.join('\n') : '';
+    return { ok: !stderr, stdout, stderr };
   }
 
   /* ------------------------- user input ----------------------------- */

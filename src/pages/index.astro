@@ -1,6 +1,7 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import Dock from '../components/Dock.astro';
+import LlmWidget from '../components/LlmWidget.astro';
 import Terminal from '../components/Terminal.astro';
 import { site } from '../site.config.ts';
 import { latestLastmod } from '../lib/content';
@@ -10,6 +11,7 @@ import { latestLastmod } from '../lib/content';
   <Terminal />
 
   <Dock />
+  <LlmWidget />
 
   {
     /* Always-rendered, crawlable identity for the home page: the terminal is the

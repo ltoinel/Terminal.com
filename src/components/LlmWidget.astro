@@ -1,0 +1,146 @@
+---
+// Top-right LLM status widget. It renders purely from the central manager
+// (src/lib/llm.ts): the currently loaded model, cumulative in/out token totals,
+// and a download progress bar while a model loads. Hidden while no model is
+// loaded (the default state). The manager is the single source of truth — this
+// component only subscribes; it never loads a model itself.
+---
+
+<div
+  id="llm-widget"
+  class="llm-widget font-mono"
+  hidden
+  aria-live="polite"
+  aria-label="Local LLM model status"
+>
+  <span class="llm-dot" aria-hidden="true"></span>
+  <span class="llm-model" id="llm-model">—</span>
+  <span class="llm-toks" id="llm-toks">
+    <span class="llm-tok" title="input tokens (prompt)">↑&nbsp;<b id="llm-in">0</b></span>
+    <span class="llm-tok" title="output tokens (generation)">↓&nbsp;<b id="llm-out">0</b></span>
+  </span>
+  <span class="llm-prog" id="llm-prog" hidden><i id="llm-bar"></i></span>
+</div>
+
+<script>
+  import { subscribeLlm, type LlmState } from '../lib/llm';
+
+  const el = document.getElementById('llm-widget');
+  const modelEl = document.getElementById('llm-model');
+  const inEl = document.getElementById('llm-in');
+  const outEl = document.getElementById('llm-out');
+  const toks = document.getElementById('llm-toks');
+  const prog = document.getElementById('llm-prog');
+  const bar = document.getElementById('llm-bar');
+
+  // Group digits with a thin space (1 240) — easier to read at a glance.
+  const fmt = (n: number): string => n.toLocaleString('fr-FR');
+
+  if (el && modelEl && inEl && outEl && toks && prog && bar) {
+    subscribeLlm((s: LlmState) => {
+      const active = !!(s.modelId || s.loading);
+      el.hidden = !active;
+      el.classList.toggle('is-loading', s.loading);
+      modelEl.textContent = s.label || s.modelId || '—';
+      inEl.textContent = fmt(s.tokensIn);
+      outEl.textContent = fmt(s.tokensOut);
+      // While loading, swap the token counters for a progress bar.
+      prog.hidden = !s.loading;
+      toks.hidden = s.loading;
+      if (s.loading) bar.style.width = Math.round((s.progress || 0) * 100) + '%';
+    });
+  }
+</script>
+
+<style>
+  .llm-widget {
+    position: fixed;
+    top: 0.75rem;
+    right: 0.75rem;
+    z-index: 9000;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    max-width: min(60vw, 360px);
+    padding: 0.3rem 0.6rem;
+    font-size: 0.78rem;
+    line-height: 1.2;
+    color: var(--fg);
+    background: color-mix(in srgb, var(--bg-bar) 88%, transparent);
+    border: 1px solid color-mix(in srgb, var(--green) 35%, transparent);
+    border-radius: 0.5rem;
+    backdrop-filter: blur(6px);
+    box-shadow: 0 10px 30px -16px rgba(0, 0, 0, 0.8);
+    user-select: none;
+  }
+
+  .llm-dot {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+  }
+  .llm-widget.is-loading .llm-dot {
+    animation: llm-pulse 1s ease-in-out infinite;
+  }
+  @keyframes llm-pulse {
+    50% {
+      opacity: 0.25;
+    }
+  }
+
+  .llm-model {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--fg-bright);
+  }
+
+  .llm-toks {
+    flex: none;
+    display: flex;
+    gap: 0.55rem;
+    color: var(--dim);
+  }
+  .llm-toks b {
+    color: var(--fg);
+    font-weight: 600;
+  }
+
+  .llm-prog {
+    flex: none;
+    width: 90px;
+    height: 6px;
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--green) 18%, transparent);
+    overflow: hidden;
+  }
+  .llm-prog i {
+    display: block;
+    height: 100%;
+    width: 0;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    transition: width 0.2s ease;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .llm-widget.is-loading .llm-dot {
+      animation: none;
+    }
+    .llm-prog i {
+      transition: none;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .llm-widget {
+      font-size: 0.72rem;
+      max-width: 70vw;
+    }
+  }
+</style>

@@ -1,6 +1,7 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import Dock from '../components/Dock.astro';
+import LlmWidget from '../components/LlmWidget.astro';
 import Terminal from '../components/Terminal.astro';
 import { routes, commandDefs, manToHtml, manMetaDescription, lastmod } from '../lib/content';
 import { site } from '../site.config.ts';
@@ -59,6 +60,7 @@ const description = manDesc || fallback;
   <Terminal />
 
   <Dock />
+  <LlmWidget />
 
   {/* Crawlable mirror of the manual the terminal renders on load. */}
   {manHtml && <article class="sr-only" set:html={manHtml} />}

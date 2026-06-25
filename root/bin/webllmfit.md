@@ -39,7 +39,7 @@ man: |
   webllmfit --all
 
   ## SEE ALSO
-  webllm, hashcat
+  miaougpt, llm, hashcat
 js: |
   // Self-contained "does it fit?" report. Reads the WebLLM model catalogue
   // (each record carries vram_required_MB + required_features) and weighs it
@@ -188,7 +188,7 @@ js: |
   if (runnable.length) {
     const biggest = runnable.reduce((a, b) => ((b.m.vram_required_MB || 0) > (a.m.vram_required_MB || 0) ? b : a));
     ctx.append('<div class="ln"><span class="accent text-glow">✓ ' + runnable.length + ' model(s) can run</span><span class="comment"> — biggest: ' + E(biggest.m.model_id) + '</span></div>');
-    ctx.line('Start one:  webllm ' + biggest.m.model_id);
+    ctx.line('Start one:  llm --load ' + biggest.m.model_id);
   } else {
     ctx.error('No model fits the estimated budget on this machine.');
   }

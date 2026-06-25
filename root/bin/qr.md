@@ -32,7 +32,7 @@ js: |
   }
 
   // Self-hosted ESM encoder (qrcode-generator), served from our own origin so
-  // `script-src 'self'` allows it; loaded on demand like the webllm engine.
+  // `script-src 'self'` allows it; loaded on demand like the LLM engine.
   let qrcode;
   try {
     qrcode = (await import('/vendor/qrcode-generator-1.4.4.js')).default;

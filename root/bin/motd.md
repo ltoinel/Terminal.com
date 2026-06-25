@@ -99,4 +99,5 @@ js: |
 
   // Quick start.
   ctx.line('→ `help` lists everything · `whoami` who am I · `ls` explore');
+  ctx.line('→ `?` ask anything in plain language — e.g. `? "what is my public IP?"`');
 ---

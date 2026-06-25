@@ -20,13 +20,16 @@ man: |
   glaude est un clin d'œil à Claude Code : l'allure (bannière, boîte d'accueil,
   invite ›) mais piloté par un LLM de *coding* open-source qui tourne
   entièrement dans le navigateur — aucun serveur, aucun appel réseau pour
-  l'inférence. Le moteur est WebLLM (@mlc-ai/web-llm) accéléré par WebGPU et la
-  famille **Qwen2.5-Coder** ; les poids sont téléchargés une fois puis mis en
-  cache. glaude partage le moteur et le cache avec la commande webllm.
+  l'inférence. Le moteur (chargement, cache, GPU) est géré par le module LLM
+  central (voir `llm` et le widget en haut à droite) ; glaude partage le modèle
+  résident avec miaougpt et denree.
 
   Sa spécialité : pondre des **sites HTML horriblement laids et flashy** —
   fonds fluo, dégradés arc-en-ciel, Comic Sans, <marquee> qui défilent, texte
   qui clignote, emojis partout. Bref, l'esthétique GeoCities de 1997.
+
+  Par défaut aucun modèle n'est chargé : glaude te propose un modèle de code et
+  te demande de confirmer son téléchargement (sauf si un modèle est déjà chaud).
 
   Au lancement, glaude affiche "la Denrée" (l'extraterrestre du film) en ASCII
   art, puis — comme Claude Code amorce un projet — il **propose un nom de
@@ -60,52 +63,35 @@ man: |
   glaude --unload
 
   ## SEE ALSO
-  webllm, mkdir, touch, ls
+  llm, miaougpt, denree, mkdir, touch, ls
 js: |
-  // glaude — une parodie de Claude Code propulsée par WebLLM (WebGPU, 100 % local),
-  // spécialisée dans la fabrication de sites HTML hideux et flashy. Au lancement
-  // elle amorce un projet sous /home/guest/<projet> (mkdir + index.html via la
-  // nouvelle mutation ctx.write, persistée en localStorage), puis ouvre une session
-  // où "le Glaude" génère des pages. /save écrit le fichier, /show l'affiche dans un
-  // faux navigateur. Réutilise le moteur/cache partagés avec `webllm`.
+  // glaude — une parodie de Claude Code propulsée par le module LLM central
+  // (ctx.llm), spécialisée dans la fabrication de sites HTML hideux et flashy.
+  // Au lancement elle amorce un projet sous /home/guest/<projet>, puis ouvre une
+  // session où "le Glaude" génère des pages. Le chargement du modèle, le cache
+  // et le comptage des tokens sont gérés par le manager unique (src/lib/llm.ts).
   const E = ctx.escape;
   const args = ctx.args.slice();
   const first = args[0];
 
-  // Pin la version du moteur (même bundle auto-hébergé que webllm).
-  const WEBLLM_VERSION = '0.2.84';
-  const WEBLLM_URL = '/vendor/web-llm-' + WEBLLM_VERSION + '.js';
-
-  // Modèles de code conseillés, du plus petit au plus gros. `base` = id sans le
-  // suffixe de quantification ; le bon build (q4f16 vs q4f32) est choisi à
-  // l'exécution selon le support GPU de shader-f16. DEFAULT_BASE = lancement nu.
+  // Modèles de code conseillés (du plus petit au plus gros). `base` = id sans le
+  // suffixe de quantification ; le bon build est choisi par le manager central.
   const RECOMMENDED = [
-    { label: 'Qwen2.5-Coder 0.5B', base: 'Qwen2.5-Coder-0.5B-Instruct', gb16: 0.5, gb32: 0.9 },
-    { label: 'Qwen2.5-Coder 1.5B', base: 'Qwen2.5-Coder-1.5B-Instruct', gb16: 1.0, gb32: 1.9 },
-    { label: 'Qwen2.5-Coder 3B',   base: 'Qwen2.5-Coder-3B-Instruct',   gb16: 1.8, gb32: 3.3 },
-    { label: 'Qwen2.5-Coder 7B',   base: 'Qwen2.5-Coder-7B-Instruct',   gb16: 4.5, gb32: 8.1 },
+    { label: 'Qwen2.5-Coder 0.5B', base: 'Qwen2.5-Coder-0.5B-Instruct', gb: 0.9 },
+    { label: 'Qwen2.5-Coder 1.5B', base: 'Qwen2.5-Coder-1.5B-Instruct', gb: 1.9 },
+    { label: 'Qwen2.5-Coder 3B',   base: 'Qwen2.5-Coder-3B-Instruct',   gb: 3.3 },
+    { label: 'Qwen2.5-Coder 7B',   base: 'Qwen2.5-Coder-7B-Instruct',   gb: 8.1 },
   ];
-  const DEFAULT_BASE = 'Qwen2.5-Coder-1.5B-Instruct';
+  const DEFAULT = { base: 'Qwen2.5-Coder-1.5B-Instruct', label: 'Qwen2.5-Coder 1.5B', gb: 1.9 };
 
-  // Slot moteur partagé avec webllm : un modèle reste résident pour la session.
-  const slot = (globalThis.__ltshWebLLM = globalThis.__ltshWebLLM || { engine: null, modelId: null });
-
-  // ---- glaude --unload : libère le modèle résident (sans import / GPU) ----
+  // ---- glaude --unload : libère le modèle résident ----
   if (first === '--unload' || first === '--stop') {
-    if (slot.engine) {
-      try { await slot.engine.unload(); } catch (e) { /* ignore */ }
-      slot.engine = null; slot.modelId = null;
-      ctx.line('glaude: modèle déchargé, mémoire GPU libérée.');
-    } else {
-      ctx.line('glaude: aucun modèle chargé.');
-    }
+    const freed = await ctx.llm.unload();
+    ctx.line(freed ? 'glaude: modèle déchargé, mémoire GPU libérée.' : 'glaude: aucun modèle chargé.');
     return;
   }
 
   // ---- "la Denrée" en pixel-art coloré (l'extraterrestre de La Soupe aux Choux) ----
-  // Une grille simplifiée : chaque caractère = un pixel, peint en bloc plein (██).
-  // R/D = rouge (crête, oreilles, épaulettes), B = beige (visage/corps),
-  // N = brun (sourcils/nez), W = blanc (yeux), o = sombre (pupilles/bouche), '.' = vide.
   const PAL = { R: '#e23b2e', D: '#a82018', B: '#e9c277', N: '#6e4a2b', W: '#ffffff', o: '#2a2a2a' };
   const PIXES = [
     "       RRRRRR       ",
@@ -126,8 +112,6 @@ js: |
     ".....BBBBBBBBBB.....",
     "......BBBBBBBB......",
   ];
-  // Peint une ligne de pixels : regroupe les pixels consécutifs de même couleur
-  // en un <span> coloré de blocs (deux ██ par pixel pour des carrés plus carrés).
   const blocksRow = (row) => {
     let html = '';
     for (let i = 0; i < row.length; ) {
@@ -149,7 +133,7 @@ js: |
   }
   ctx.line('');
 
-  // Boîte d'accueil façon Claude Code (le clin d'œil au vrai CLI).
+  // Boîte d'accueil façon Claude Code.
   const box = (t) => '<div class="ln ascii-art"><span class="accent">' + E(t) + '</span></div>';
   ctx.append(box('╭──────────────────────────────────────────────╮'));
   ctx.append('<div class="ln ascii-art"><span class="accent">│ </span><span class="accent text-glow">✻</span><span class="accent"> Bienvenue dans Glaude Code                 │</span></div>');
@@ -167,16 +151,15 @@ js: |
       ctx.append(
         '<div class="ln out"><span class="accent">' + (i + 1) + ')</span> ' +
         '<span class="cmd">' + E(r.label) + '</span> ' +
-        '<span class="comment">≈ ' + E(r.gb16.toFixed(2)) + '–' + E(r.gb32.toFixed(2)) + ' Go</span></div>',
+        '<span class="comment">≈ ' + E(r.gb.toFixed(1)) + ' Go</span></div>',
       );
     });
     ctx.line('');
-    ctx.line('Démarre :  glaude <numéro>   (ex. glaude 1)   ·   tous les modèles : `webllm --list-all`');
+    ctx.line('Démarre :  glaude <numéro>   (ex. glaude 1)   ·   tous les modèles : `llm --list-all`');
     return;
   }
 
   // ---- petits utilitaires fichiers ----
-  // Nettoie une saisie en nom sûr : minuscules, [a-z0-9._-], sans espaces ni accents.
   const slugify = (s) =>
     (s || '')
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -184,14 +167,11 @@ js: |
       .replace(/[^a-z0-9._-]+/g, '-')
       .replace(/^[-.]+|[-.]+$/g, '')
       .slice(0, 48);
-  // Nom de fichier web : slug + extension .html par défaut.
   const fileName = (s, def) => {
     let f = slugify(s) || def;
     if (!/\.[a-z0-9]+$/.test(f)) f += '.html';
     return f;
   };
-  // Extrait un document HTML d'une réponse : bloc ```html, sinon bloc ``` qui
-  // contient des balises, sinon le texte brut s'il ressemble à du HTML.
   const extractHtml = (text) => {
     if (!text) return '';
     let m = text.match(/```html\s*([\s\S]*?)```/i);
@@ -244,7 +224,7 @@ js: |
       '</div><iframe class="glb-frame" sandbox=""></iframe>';
     win.querySelector('.glb-url').textContent = url;
     const frame = win.querySelector('.glb-frame');
-    frame.srcdoc = html; // propriété (pas d'attribut) → pas d'échappement à gérer
+    frame.srcdoc = html;
     document.body.appendChild(backdrop);
     document.body.appendChild(win);
 
@@ -260,7 +240,6 @@ js: |
   };
 
   // ---- mini-archiveur ZIP (méthode « stored », pur JS, sans dépendance) ----
-  // Construit une archive ZIP non compressée à partir de [{name, data:Uint8Array}].
   const CRC_TABLE = (() => {
     const t = new Uint32Array(256);
     for (let n = 0; n < 256; n++) {
@@ -317,7 +296,6 @@ js: |
   // ---- amorçage du projet (avant le chargement du modèle, comme Claude Code) ----
   const HOME = (ctx.cfg && ctx.cfg.home) || '/home/guest';
   const pick = (a) => a[Math.floor(Math.random() * a.length)];
-  // Nom de projet aléatoire, bien francophone (nom + adjectif, à la GeoCities du terroir).
   const NOUN = [
     'baguette', 'fromage', 'bistrot', 'potager', 'vignoble', 'escargot', 'accordeon',
     'camembert', 'terroir', 'marmite', 'soupe', 'chou', 'beret', 'croissant', 'pinard',
@@ -338,7 +316,6 @@ js: |
   const ok = ((await ctx.ask('créer « ' + projPath + ' » et y travailler ? [Y/n]')) || '').trim().toLowerCase();
   if (ok === 'n' || ok === 'no' || ok === 'non') { ctx.line('glaude: annulé — pas de projet créé.'); return; }
 
-  // Crée le dossier (idempotent : -p), puis y écrit un index.html de départ bien moche.
   let mkErr = ctx.mkdir(projPath, true);
   if (mkErr) { ctx.error('glaude: ' + mkErr); return; }
   const STARTER =
@@ -362,123 +339,38 @@ js: |
   ctx.append('<div class="ln comment">         index.html de départ écrit — tape /show pour l\'admirer.</div>');
   ctx.line('');
 
-  // ---- vérification WebGPU ----
-  if (!('gpu' in navigator) || !navigator.gpu) {
-    ctx.error('glaude: WebGPU n\'est pas disponible dans ce navigateur.');
-    ctx.line('Le Glaude a besoin de WebGPU pour coder. Essaie un Chrome/Edge récent (≥ 113) ou Safari 18+.');
-    ctx.line('Sur Linux + Chrome, il faut parfois activer : chrome://flags/#enable-unsafe-webgpu');
-    ctx.line('(Ton projet « ' + projName + ' » reste créé — `cat index.html`, relance `glaude` pour /show.)');
+  // ---- chargement du modèle via le module central (consentement + barre) ----
+  // Réutilise le modèle déjà chaud si présent et qu'aucun modèle n'est demandé ;
+  // sinon propose un modèle de code (par numéro, id, ou le défaut).
+  let session;
+  try {
+    const st = ctx.llm.state();
+    if (st && st.modelId && !first) {
+      session = { modelId: st.modelId, label: st.label };
+      ctx.line('le Glaude réutilise le modèle déjà chaud : ' + (st.label || st.modelId));
+    } else {
+      let base = DEFAULT.base, label = DEFAULT.label, gb = DEFAULT.gb;
+      if (first && /^\d+$/.test(first)) {
+        const n = parseInt(first, 10);
+        if (n >= 1 && n <= RECOMMENDED.length) { base = RECOMMENDED[n - 1].base; label = RECOMMENDED[n - 1].label; gb = RECOMMENDED[n - 1].gb; }
+        else { ctx.error('glaude: pas de modèle conseillé n°' + n + ' — voir : glaude --list'); return; }
+      } else if (first) {
+        base = first; label = first; gb = undefined;
+      }
+      session = await ctx.llm.ensure({ base, label, gb, reason: 'le Glaude code ton site' });
+    }
+  } catch (e) {
+    ctx.error('glaude: ' + ((e && (e.message || e.name)) || e));
+    ctx.line('Le Glaude a besoin de WebGPU. Essaie un Chrome/Edge récent (≥ 113) ou Safari 18+.');
+    ctx.line('(Ton projet « ' + projName + ' » reste créé — relance `glaude` pour /show.)');
     return;
   }
-  let adapter = null;
-  try { adapter = await navigator.gpu.requestAdapter(); } catch (e) { /* aucun */ }
-  if (!adapter) {
-    ctx.error('glaude: aucun adaptateur WebGPU — le GPU est bloqué ou indisponible.');
-    return;
-  }
-  const hasF16 = !!(adapter.features && typeof adapter.features.has === 'function' && adapter.features.has('shader-f16'));
-  const QUANT = hasF16 ? 'q4f16_1' : 'q4f32_1';
+  if (!session) { ctx.line('glaude: annulé — aucun modèle chargé (ton projet « ' + projName + ' » reste créé).'); return; }
+  const modelId = session.modelId;
 
   // Ancre scrollable du terminal (pour rester collé en bas pendant le stream).
-  const anchor = ctx.append('<div class="ln comment">moteur WebLLM @' + E(WEBLLM_VERSION) + ' · shader-f16: ' + (hasF16 ? 'oui' : 'non') + '</div>');
-  const scroller = anchor.closest('.ssh-body');
+  const scroller = (ctx.append('<div class="ln comment">moteur prêt — ' + E(session.label || modelId) + '</div>')).closest('.ssh-body');
   const toBottom = () => { if (scroller) scroller.scrollTop = scroller.scrollHeight; };
-
-  // ---- chargement paresseux du moteur WebLLM auto-hébergé ----
-  ctx.line('le Glaude allume le fourneau (chargement du moteur)…');
-  let webllm;
-  try {
-    webllm = await import(WEBLLM_URL);
-  } catch (e) {
-    ctx.error('glaude: impossible de charger le moteur — ' + (e.message || e.name));
-    ctx.line('Le bundle est attendu à ' + WEBLLM_URL + ' (servi par ce site).');
-    return;
-  }
-
-  const ids = (webllm.prebuiltAppConfig && webllm.prebuiltAppConfig.model_list || []).map((m) => m.model_id);
-  const idSet = new Set(ids);
-
-  // Résout un `base` vers le build qui tournera vraiment sur ce GPU.
-  const pickId = (base) => {
-    const here = ids.find((id) => id.includes(base + '-' + QUANT));
-    if (here) return here;
-    if (hasF16) { const alt = ids.find((id) => id.includes(base + '-q4f32_1')); if (alt) return alt; }
-    return undefined;
-  };
-  const recommended = RECOMMENDED.map((r) => ({ ...r, id: pickId(r.base) })).filter((r) => r.id);
-
-  // ---- résout le modèle demandé (numéro, id, sous-chaîne, ou défaut) ----
-  let modelId = null;
-  if (!first) {
-    modelId = pickId(DEFAULT_BASE) || (recommended[0] && recommended[0].id) || null;
-    if (!modelId) { ctx.error('glaude: aucun modèle de code compatible avec ce GPU — voir `webllm --list-all`.'); return; }
-  } else if (/^\d+$/.test(first)) {
-    const n = parseInt(first, 10);
-    if (n >= 1 && n <= recommended.length) modelId = recommended[n - 1].id;
-    else { ctx.error('glaude: pas de modèle conseillé n°' + n + ' — voir : glaude --list'); return; }
-  } else if (idSet.has(first)) {
-    modelId = first;
-  } else {
-    const needle = first.toLowerCase();
-    const hits = ids.filter((id) => id.toLowerCase().includes(needle));
-    if (hits.length === 1) modelId = hits[0];
-    else if (hits.length > 1) {
-      ctx.error('glaude: ambigu — ' + hits.length + ' modèles correspondent à "' + first + '" :');
-      hits.slice(0, 8).forEach((h) => ctx.line('  ' + h));
-      return;
-    } else { ctx.error('glaude: modèle inconnu "' + first + '" — voir : glaude --list'); return; }
-  }
-
-  // q4f16 sur un GPU sans shader-f16 → bascule transparente vers q4f32.
-  if (!hasF16 && /q4f16/.test(modelId)) {
-    const swapped = modelId.replace(/q4f16/g, 'q4f32');
-    if (idSet.has(swapped)) { ctx.line('note: ce GPU n\'a pas shader-f16 → bascule sur ' + swapped); modelId = swapped; }
-    else { ctx.error('glaude: "' + modelId + '" exige shader-f16, absent sur ce GPU. Choisis un build q4f32.'); return; }
-  }
-
-  // ---- chargement du modèle (ou réutilisation du résident) + barre ----
-  let engine;
-  if (slot.engine && slot.modelId === modelId) {
-    engine = slot.engine;
-    ctx.line('modèle « ' + modelId + ' » déjà chaud — on reprend.');
-  } else {
-    if (slot.engine) { try { await slot.engine.unload(); } catch (e) { /* ignore */ } slot.engine = null; slot.modelId = null; }
-
-    const BARW = 28;
-    const renderBar = (p) => {
-      const f = Math.max(0, Math.min(BARW, Math.round((p || 0) * BARW)));
-      return '[' + '#'.repeat(f) + '·'.repeat(BARW - f) + '] ' + Math.round((p || 0) * 100) + '%';
-    };
-    ctx.append('<div class="ln"><span class="accent text-glow">↓ mijotage</span> <span class="comment">' + E(modelId) + '</span></div>');
-    const progEl = ctx.append('<div class="ln comment">préparation…</div>');
-    const onProgress = (r) => {
-      progEl.innerHTML =
-        '<span class="accent">' + E(renderBar(r.progress)) + '</span> ' +
-        '<span class="comment">' + E((r.text || '').slice(0, 80)) + '</span>';
-      toBottom();
-    };
-
-    try {
-      engine = await webllm.CreateMLCEngine(modelId, { initProgressCallback: onProgress });
-    } catch (e) {
-      // Certains GPU annoncent shader-f16 mais échouent à compiler les shaders f16
-      // (Invalid ShaderModule) ; on retente une fois avec le build q4f32.
-      const msg = String((e && (e.message || e.name)) || e);
-      const shaderIssue = /ShaderModule|shader-f16|f16|compute stage|createShaderModule|previous error/i.test(msg);
-      const f32 = modelId.replace(/q4f16/g, 'q4f32');
-      if (shaderIssue && /q4f16/.test(modelId) && idSet.has(f32)) {
-        ctx.line('compilation shader échouée → on retente avec ' + f32);
-        try { engine = await webllm.CreateMLCEngine(f32, { initProgressCallback: onProgress }); modelId = f32; }
-        catch (e2) { ctx.error('glaude: échec d\'initialisation — ' + (e2.message || e2.name)); return; }
-      } else {
-        ctx.error('glaude: échec d\'initialisation du modèle — ' + (e.message || e.name));
-        ctx.line('Le premier lancement télécharge les poids ; vérifie ta connexion et ton espace disque.');
-        return;
-      }
-    }
-    slot.engine = engine; slot.modelId = modelId;
-    progEl.innerHTML = '<span class="accent">' + E(renderBar(1)) + '</span> <span class="comment">prêt</span>';
-  }
 
   // ---- session : génération de sites ----
   ctx.line('');
@@ -487,7 +379,6 @@ js: |
   ctx.line('Commandes : /help · /show · /save · /download · /files · /reset · /exit');
   ctx.line('');
 
-  // Le "system prompt" : le Glaude, webmaster du laid et du flashy.
   const SYSTEM = {
     role: 'system',
     content:
@@ -506,15 +397,11 @@ js: |
       "Réponds en français.",
   };
   let messages = [SYSTEM];
-  let lastHtml = ''; // dernier document HTML généré (pour /save et /show)
+  let lastHtml = '';
 
-  // Ctrl+C (ctx.signal) interrompt une génération en cours et clôt la session.
-  let interrupted = false;
+  // Ctrl+C interrompt une génération en cours.
   if (ctx.signal) {
-    ctx.signal.addEventListener('abort', () => {
-      interrupted = true;
-      try { engine.interruptGenerate(); } catch (e) { /* ignore */ }
-    }, { once: true });
+    ctx.signal.addEventListener('abort', () => { ctx.llm.interrupt(); }, { once: true });
   }
 
   while (true) {
@@ -558,7 +445,6 @@ js: |
       const full = projPath + '/' + f;
       const r = ctx.read(full);
       let html = (r && r.content) || '';
-      // Pas encore enregistré ? On sauve la dernière page générée au passage.
       if ((!html || !html.trim()) && lastHtml) {
         const e3 = ctx.write(full, lastHtml);
         if (!e3) { html = lastHtml; ctx.line('💾 (enregistré ' + f + ' au passage)'); }
@@ -570,7 +456,6 @@ js: |
       continue;
     }
     if (low === '/download' || low === '/dl' || low === '/zip') {
-      // Rassemble récursivement tous les fichiers du projet, puis télécharge un .zip.
       const enc = new TextEncoder();
       const files = [];
       const walk = (absDir, relDir) => {
@@ -604,53 +489,41 @@ js: |
 
     messages.push({ role: 'user', content: q });
 
-    // Stream de la réponse dans une ligne unique (textContent — jamais d'HTML).
+    // Stream de la réponse via le module central (tokens comptés par le widget).
     const row = ctx.append('<div class="ln out" style="white-space:pre-wrap"><span class="accent">le Glaude› </span><span class="reply comment">…</span></div>');
     const replyEl = row.querySelector('.reply');
-    let reply = '';
-    let usage = null;
+    let result;
     try {
-      const stream = await engine.chat.completions.create({
+      result = await ctx.llm.chat({
         messages,
         stream: true,
-        stream_options: { include_usage: true },
-      });
-      for await (const chunk of stream) {
-        const ch0 = chunk.choices && chunk.choices[0];
-        const delta = ch0 && ch0.delta && ch0.delta.content ? ch0.delta.content : '';
-        if (delta) {
-          reply += delta;
+        signal: ctx.signal,
+        onToken: (delta, full) => {
           replyEl.classList.remove('comment');
-          replyEl.textContent = reply;
+          replyEl.textContent = full;
           toBottom();
-        }
-        if (chunk.usage) usage = chunk.usage;
-        if (ctx.signal && ctx.signal.aborted) break;
-      }
+        },
+      });
     } catch (e) {
       if (!(ctx.signal && ctx.signal.aborted)) ctx.error('glaude: génération échouée — ' + (e.message || e.name));
     }
 
-    if (!reply) replyEl.textContent = interrupted ? '⏹ interrompu' : '(la Denrée a mangé la réponse)';
+    const reply = (result && result.content) || replyEl.textContent || '';
+    if (!reply) replyEl.textContent = '(la Denrée a mangé la réponse)';
     messages.push({ role: 'assistant', content: reply });
 
-    // Mémorise le HTML produit (s'il y en a) pour /save et /show.
     const h = extractHtml(reply);
     if (h) {
       lastHtml = h;
       ctx.append('<div class="ln comment">↳ page HTML détectée (' + h.length + ' octets) — /save pour l\'écrire · /show pour l\'admirer.</div>');
     }
 
-    if (usage && usage.extra && typeof usage.extra.decode_tokens_per_s === 'number') {
-      ctx.append(
-        '<div class="ln comment">' +
-        E((usage.completion_tokens || 0) + ' tokens · ' + usage.extra.decode_tokens_per_s.toFixed(1) + ' tok/s') +
-        '</div>',
-      );
+    if (result && result.usage && typeof result.usage.tokPerSec === 'number') {
+      ctx.append('<div class="ln comment">' + E(result.usage.completionTokens + ' tokens · ' + result.usage.tokPerSec.toFixed(1) + ' tok/s') + '</div>');
     }
 
     if (ctx.signal && ctx.signal.aborted) break;
   }
 
-  ctx.line('glaude: session close (le modèle reste chaud — `glaude --unload` pour le libérer).');
+  ctx.line('glaude: session close (le modèle reste chaud — `llm --unload` pour le libérer).');
 ---
