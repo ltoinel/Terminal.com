@@ -6,4 +6,5 @@ node_modules/
 .claude/
 vendor/
 push.config.php
+src/site.config.ts
 data/
