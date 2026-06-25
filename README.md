@@ -94,6 +94,12 @@ The top-right buttons use [astro-icon](https://www.astroicon.dev/) with the
 
 ## Reusing this portal
 
+> **`src/site.config.ts` is gitignored** (it holds your personal identity). It is
+> created automatically from **`src/site.config.example.ts`** on `npm install`
+> (and on any `dev`/`build`/`check`/`test` run). An existing file is never
+> overwritten — copy it by hand with `cp src/site.config.example.ts src/site.config.ts`
+> if you prefer.
+
 1. Edit **`src/site.config.ts`** (identity, URL, profiles, shell host/user).
 2. Replace the contents of **`root/home/<user>/`** (your `.md` documents; `<user>`
    is `shell.user`, e.g. `guest`) and, if needed, the "decor" files under
