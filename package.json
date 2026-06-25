@@ -8,6 +8,11 @@
   "license": "MIT",
   "homepage": "https://ludovic.toinel.com",
   "scripts": {
+    "prepare": "node scripts/ensure-site-config.ts",
+    "predev": "node scripts/ensure-site-config.ts",
+    "prebuild": "node scripts/ensure-site-config.ts",
+    "precheck": "node scripts/ensure-site-config.ts",
+    "pretest": "node scripts/ensure-site-config.ts",
     "dev": "astro dev",
     "start": "astro dev",
     "build": "astro build",
